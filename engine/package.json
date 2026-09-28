@@ -1,0 +1,21 @@
+{
+  "name": "wa-gateway-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WA Gateway lokal - mesin Baileys (multi sesi) untuk server Windows + XAMPP",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
+    "axios": "^1.20.0",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "mysql2": "^3.24.4",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4"
+  }
+}

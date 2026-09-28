@@ -1,0 +1,30 @@
+# =====================================================================
+#  WA Gateway Lokal — berkas yang TIDAK boleh masuk repo
+#  (repository ini dipakai untuk deploy ke server lokal lain)
+# =====================================================================
+
+# --- RAHASIA: token engine + kredensial database ---
+engine/.env
+engine/.env.local
+
+# --- KUNCI AKUN WHATSAPP: folder sesi Baileys ---
+# Hilang = harus memindai QR ulang. Jangan pernah dibagikan.
+engine/sessions/
+
+# --- data lokal & unggahan ---
+engine/logs/
+dashboard/uploads/
+dashboard/*.local.php
+
+# --- dependensi (di-install ulang di server: npm install --allow-git=all) ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# --- log (termasuk ack_log.txt dari endpoint gateway) ---
+*.log
+
+# --- artefak alat bantu / uji ---
+.hermes/
+.verify.txt
+tests/siber-integration/tmp/
