@@ -37,7 +37,48 @@ cd D:\ApplicationWeb\wa-gateway\engine && npm install --allow-git=all
 #    C:\xampp\htdocs\wa-gateway  ->  D:\ApplicationWeb\wa-gateway\dashboard
 ```
 
-## 3. Menjalankan
+## 3. Memasang di server lokal lain (clone dari GitHub)
+
+Repo: `https://github.com/fikrudzulfahmi/wa-gateway.git` — berisi seluruh kode, **tanpa** rahasia
+(`engine/.env` dan `engine/sessions/` sengaja di-ignore).
+
+```bash
+# 1. Ambil kode
+git clone https://github.com/fikrudzulfahmi/wa-gateway.git D:\ApplicationWeb\wa-gateway
+cd /d D:\ApplicationWeb\wa-gateway
+
+# 2. Siapkan database
+"C:\xampp\mysql\bin\mysql.exe" -u root < sql\schema.sql
+
+# 3. Konfigurasi engine (berkas .env TIDAK ikut repo — buat dari contohnya)
+cd engine
+copy .env.example .env          # sesuaikan DB_USER/DB_PASSWORD bila bukan XAMPP standar
+
+# 4. Dependensi (WAJIB pakai --allow-git=all: ada dependensi git "libsignal")
+npm install --allow-git=all
+npm install @whiskeysockets/baileys@6.7.24
+
+# 5. Dashboard: tautkan ke htdocs dengan junction (jangan disalin, agar update git langsung terpakai)
+powershell -NoProfile -Command "New-Item -ItemType Junction -Path 'C:\xampp\htdocs\wa-gateway' -Target 'D:\ApplicationWeb\wa-gateway\dashboard'"
+
+# 6. Jalankan
+start-gateway.bat                # lalu buka http://localhost/wa-gateway (login admin/admin123)
+```
+
+**Kredensial dashboard berbeda dari bawaan?** Jangan ubah `dashboard/config.php` (berkas yang di-commit).
+Buat `dashboard/config.local.php` (sudah di-ignore) yang isinya:
+
+```php
+<?php
+return ['db' => ['user' => 'wa_gateway', 'pass' => 'rahasia-anda']];
+```
+
+**Penting saat memindahkan server:** salin folder `engine\sessions\` dari server lama (berisi kunci
+akun WhatsApp) supaya tidak perlu memindai QR lagi — atau pindai QR baru bila nomornya memang mau diganti.
+Untuk memperbarui versi terpasang di server: `git pull` lalu restart engine (folder `engine` tidak
+perlu `npm install` ulang, kecuali `package.json` berubah).
+
+## 4. Menjalankan
 
 1. **XAMPP Control Panel** → Start **Apache** dan **MySQL**.
 2. Dobel klik `start-gateway.bat` (menjalankan engine) — biarkan jendelanya terbuka.
@@ -47,7 +88,7 @@ cd D:\ApplicationWeb\wa-gateway\engine && npm install --allow-git=all
 5. Setelah tersambung, status berubah **Tersambung** dan nomor tampil. Uji dengan menu **Kirim Pesan**.
 6. **Ganti password** di menu Pengaturan.
 
-## 4. Fitur
+## 5. Fitur
 
 | Menu | Isi |
 |---|---|
@@ -65,7 +106,7 @@ cd D:\ApplicationWeb\wa-gateway\engine && npm install --allow-git=all
 Status pesan yang dilacak: `antrean → dikirim → terkirim → sampai (centang 2) → dibaca (centang biru)`,
 plus `gagal` beserta alasannya. **Dibaca** hanya muncul bila setelan privasi penerima mengizinkan.
 
-## 5. Keamanan (penting)
+## 6. Keamanan (penting)
 
 - Dashboard hanya untuk jaringan lokal. Jika perlu diakses dari HP di LAN, batasi IP di
   `httpd.conf` dan pakai password kuat.
@@ -75,14 +116,14 @@ plus `gagal` beserta alasannya. **Dibaca** hanya muncul bila setelan privasi pen
 - Token engine & token tiap aplikasi sebaiknya diganti dari bawaan dan tidak ditulis di kode publik.
 - Folder `engine/sessions/` = kunci akun WhatsApp. Jangan dibagikan; cadangkan berkala.
 
-## 6. Operasional
+## 7. Operasional
 
 - **Auto-start setelah reboot**: lihat `docs/OPERASIONAL.md` (NSSM / Task Scheduler).
 - **Backup**: `engine/sessions/` + dump database `wa_gateway`.
 - **Log**: menu Log Engine, atau console jendela engine.
 - **QR kedaluwarsa/berhenti**: menu Dashboard → **Sambungkan ulang**.
 
-## 7. Batasan yang harus disadari
+## 8. Batasan yang harus disadari
 
 1. Inkoneksi ini memakai WhatsApp Web **tidak resmi** (Baileys). Risiko pemblokiran nomor ada —
    pakai **nomor khusus**, jangan blast ribuan pesan sekaligus.
