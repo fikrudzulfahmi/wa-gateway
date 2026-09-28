@@ -42,6 +42,13 @@ cd D:\ApplicationWeb\wa-gateway\engine && npm install --allow-git=all
 Repo: `https://github.com/fikrudzulfahmi/wa-gateway.git` — berisi seluruh kode, **tanpa** rahasia
 (`engine/.env` dan `engine/sessions/` sengaja di-ignore).
 
+> **Memasang di server sekolah / mesin yang diakses lewat AnyDesk?** Pakai panduan langkah-demi-langkah
+> **[`docs/INSTAL-SERVER.md`](docs/INSTAL-SERVER.md)** + skrip **`install-server.ps1`**
+> (idempoten; ada mode uji `-CheckOnly` yang tidak mengubah apa pun). Ringkasnya:
+> `git clone` → `powershell -ExecutionPolicy Bypass -File install-server.ps1`.
+> Panduan itu juga mencakup uji jaringan sekolah, engine sebagai layanan Windows, dan cara
+> memindai QR dari layar remote.
+
 ```bash
 # 1. Ambil kode
 git clone https://github.com/fikrudzulfahmi/wa-gateway.git D:\ApplicationWeb\wa-gateway
