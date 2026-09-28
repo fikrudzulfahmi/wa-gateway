@@ -65,7 +65,6 @@ $engine = Join-Path $RepoDir 'engine'
 $dash   = Join-Path $RepoDir 'dashboard'
 $schema = Join-Path $RepoDir 'sql\schema.sql'
 $linkOk = Join-Path $XamppDir 'htdocs\wa-gateway'
-$npmArgs = @('install', '--allow-git=all')
 
 # =====================================================================
 Judul " 1. PRASYARAT"
