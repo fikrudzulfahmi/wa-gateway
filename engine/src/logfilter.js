@@ -19,12 +19,14 @@
  * Cara mematikan saringan ini: set WA_LOG_NOISE=off pada engine/.env.
  */
 
-const POLA_NOISE = new RegExp(
+export const POLA_NOISE = new RegExp(
   [
     'Bad MAC',
     'Failed to decrypt',
     'Session error',
     'Closing (open|stale) session',
+    'Closing stale open session',
+    'Session already (closed|open)',
     'Decrypted message with closed session',
     'Unhandled bucket type',
     'Expected pubkey of length',
