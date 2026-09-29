@@ -47,7 +47,9 @@ $clients = db_all('SELECT name, base_url, is_active, last_pull_at, last_pull_sta
                         <b class="s-quota"><?= (int) $s['sent_today'] ?>/<?= (int) $s['daily_quota'] ?></b>
                         &middot; tersambung sejak <span class="s-since"><?= fmt_ago($s['connected_at']) ?></span>
                     </div>
-                    <?php if ($s['last_error']): ?>
+                    <?php if ($s['status'] === 'qr'): ?>
+                        <div class="muted">QR diperbarui otomatis tiap ±1 menit &middot; pindai dari HP: WhatsApp &rarr; Perangkat tertaut &rarr; Tautkan perangkat</div>
+                    <?php elseif ($s['last_error']): ?>
                         <div class="muted err-text">Terakhir: <?= e($s['last_error']) ?></div>
                     <?php endif; ?>
                 </div>

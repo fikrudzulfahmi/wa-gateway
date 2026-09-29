@@ -133,9 +133,10 @@ export class WaSession {
 
   async onConnectionUpdate({ connection, lastDisconnect, qr }) {
     if (qr) {
-      // Simpan QR (data URL PNG) supaya dashboard bisa langsung menampilkan
+      // Simpan QR (data URL PNG) supaya dashboard bisa langsung menampilkan.
+      // last_error dikosongkan: QR baru berarti siklus normal, bukan kegagalan.
       this.qrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 340 });
-      await q('UPDATE wa_sessions SET qr_string = ?, qr_updated_at = NOW(), status = ? WHERE name = ?', [
+      await q('UPDATE wa_sessions SET qr_string = ?, qr_updated_at = NOW(), status = ?, last_error = NULL WHERE name = ?', [
         this.qrDataUrl,
         'qr',
         this.name,
@@ -169,7 +170,16 @@ export class WaSession {
       const errMsg = lastDisconnect?.error?.message ?? reason;
       this.sock = null;
 
-      await q('UPDATE wa_sessions SET last_error = ? WHERE name = ?', [String(errMsg).slice(0, 255), this.name]);
+      // Sesi yang BELUM pernah dipindai akan terus-menerus menutup koneksi saat siklus QR
+      // habis ("QR refs attempts ended", timedOut). Itu NORMAL, bukan kegagalan - menyimpannya
+      // sebagai last_error membuat dashboard menampilkan pesan error palsu tepat saat user
+      // hendak memindai QR. Jadi hanya catat error untuk sesi yang sudah pernah tersambung.
+      const belumPernahDipindai = !this.phone && code !== DisconnectReason.loggedOut;
+      if (belumPernahDipindai) {
+        await q('UPDATE wa_sessions SET last_error = NULL WHERE name = ?', [this.name]);
+      } else {
+        await q('UPDATE wa_sessions SET last_error = ? WHERE name = ?', [String(errMsg).slice(0, 255), this.name]);
+      }
       dbLog(code === DisconnectReason.loggedOut ? 'warning' : 'info', 'disconnected', `sesi "${this.name}" terputus (${reason})`, null, this.id);
 
       if (code === DisconnectReason.loggedOut) {
