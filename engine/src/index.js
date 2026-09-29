@@ -1,3 +1,6 @@
+// WAJIB paling atas: memasang penyaring kebisingan console SEBELUM modul lain dimuat,
+// supaya cetakan langsung dari libsignal (Bad MAC / Failed to decrypt) ikut tersaring.
+import './logfilter.js';
 import { config } from './config.js';
 import { q, one, dbPing, dbLog, setSetting, getSetting } from './db.js';
 import { WaSession } from './session.js';

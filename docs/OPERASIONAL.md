@@ -80,3 +80,44 @@ robocopy "D:\ApplicationWeb\wa-gateway\engine\sessions" "D:\backup\wa-sessions" 
 - Batasi kuota harian per sesi (300 pesan/hari sudah cukup agresif).
 - Untuk pengumuman massal, kirim bertahap dan pantau menu Antrean.
 - Hindari mengirim tautan yang sama persis ke ratusan nomor dalam waktu singkat.
+
+## 8. Jendela engine dibanjiri "Bad MAC" / "Failed to decrypt"
+
+Gejala: jendela engine menampilkan bertubi-tubi
+
+```
+Failed to decrypt message with any known session...
+Session error:Error: Bad MAC Error: Bad MAC
+    at Object.verifyMAC (...\libsignal\src\crypto.js:87:15)
+```
+
+**Artinya:** ada pesan **MASUK** yang tidak bisa didekripsi. Ini **tidak mempengaruhi
+pengiriman keluar** — menu Antrean/Rekap tetap normal.
+
+Dua kemungkinan, urut dari yang paling penting:
+
+1. **Ada DUA engine memakai sesi WA yang sama** (mis. dijalankan dua kali: dari
+   Task Scheduler/layanan *dan* dari `start-gateway.bat`). Dua proses berbagi kredensial
+   yang sama akan saling merusak kunci dekripsi → banjir Bad MAC terus-menerus.
+   Periksa di server:
+
+   ```bat
+   tasklist | findstr /i node.exe
+   netstat -ano | findstr :3001
+   ```
+
+   Harus **tepat satu** proses node dan satu pendengar di port 3001. Kalau ada dua,
+   matikan yang kelebihan: `taskkill /F /PID <pid>`.
+
+2. **Kebisingan biasa** dari pesan yang terkirim sebelum sesi selesai ditautkan
+   (khas setelah pindai QR / saat ada perangkat tertaut lain menyinkronkan riwayat).
+
+Sejak versi ini, baris kebisingan itu **diredam otomatis** dan diringkas maksimum
+sekali per menit:
+
+```
+[redam] N baris kebisingan libsignal disembunyikan (pesan masuk gagal didekripsi ...)
+```
+
+Mau melihat semuanya kembali (untuk penelusuran)? set `WA_LOG_NOISE=off` di `engine/.env`
+lalu jalankan ulang engine.
