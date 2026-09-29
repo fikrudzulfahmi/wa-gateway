@@ -345,6 +345,45 @@ if ($method === 'POST') {
             flash('Aplikasi dihapus.');
             redirect('index.php?page=klien');
 
+        // Uji koneksi ke endpoint aplikasi PERSIS seperti yang dipakai engine, supaya
+        // salah path atau token langsung ketahuan dari dashboard (tanpa menebak-nebak).
+        case 'client_test':
+            auth_require();
+            $c = db_one('SELECT * FROM wa_clients WHERE id = ?', [(int) ($_POST['id'] ?? 0)]);
+            if (!$c) {
+                flash('Aplikasi tidak ditemukan.', 'err');
+                redirect('index.php?page=klien');
+            }
+
+            $url = rtrim((string) $c['base_url'], '/') . (string) $c['jobs_path'];
+            $ch  = curl_init($url . '?limit=1');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+                CURLOPT_HTTPHEADER     => ['X-Gateway-Token: ' . $c['token'], 'Accept: application/json'],
+            ]);
+            $body  = (string) curl_exec($ch);
+            $code  = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $ctype = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+            $gagal = curl_error($ch);
+            curl_close($ch);
+
+            $cuplik = preg_replace('/\s+/', ' ', substr($body, 0, 110));
+            if ($gagal !== '') {
+                flash("GAGAL terhubung ke {$url} → {$gagal}. Periksa Base URL (tanpa garis miring di akhir) dan koneksi internet server ini.", 'err');
+            } elseif ($code === 401 || $code === 403) {
+                flash("TOKEN TIDAK COCOK → HTTP {$code} dari {$url}. Samakan kolom Token di sini dengan WA_GATEWAY_TOKEN di _config.php aplikasi. Balasan: {$cuplik}", 'err');
+            } elseif (str_contains(strtolower($ctype), 'json')) {
+                if (str_contains($body, '"ok":true') || str_contains($body, '"ok": true')) {
+                    flash("BERHASIL → {$url} menjawab JSON (HTTP {$code}). Integrasi siap; klik “Tarik job sekarang”. Balasan: {$cuplik}", 'ok');
+                } else {
+                    flash("Endpoint menjawab JSON tetapi MENOLAK permintaan (HTTP {$code}): {$cuplik}", 'err');
+                }
+            } else {
+                flash("PATH SALAH / ENDPOINT BELUM ADA → {$url} menjawab HTTP {$code} dengan tipe {$ctype} (bukan JSON). Pastikan kolom Path daftar pesan diisi path yang benar, mis. /wa-gateway/jobs.php — bukan dibiarkan kosong. Balasan: {$cuplik}", 'err');
+            }
+            redirect('index.php?page=klien');
+
         case 'client_pull':
             auth_require();
             $r = engine('POST', '/api/pull-now');

@@ -82,6 +82,11 @@ $sessions = db_all('SELECT id, name, label, phone FROM wa_sessions ORDER BY id')
                     </td>
                     <td><input class="token" readonly value="<?= e($c['token']) ?>" onclick="this.select()"></td>
                     <td class="nowrap">
+                        <form method="post" action="index.php?action=client_test" style="display:inline">
+                            <input type="hidden" name="_csrf" value="<?= csrf_token() ?>">
+                            <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
+                            <button class="btn tiny">Uji koneksi</button>
+                        </form>
                         <a class="btn tiny" href="index.php?page=klien&edit=<?= (int) $c['id'] ?>">Ubah</a>
                         <form method="post" action="index.php?action=client_delete" style="display:inline" onsubmit="return confirm('Hapus aplikasi ini?')">
                             <input type="hidden" name="_csrf" value="<?= csrf_token() ?>">
