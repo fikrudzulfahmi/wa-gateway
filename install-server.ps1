@@ -110,25 +110,42 @@ if ($script:gagal -gt 0) {
 # =====================================================================
 Judul " 3. DATABASE"
 # =====================================================================
+# Bedakan "MySQL mati" dari "database kosong" - kalau tidak dibedakan, skrip akan
+# mengira server baru perlu impor skema padahal layanannya memang belum dinyalakan.
 $koneksiArg = @('-u', $DbUser)
 if ($DbPass -ne '') { $koneksiArg += "-p$DbPass" }
+$mysqladmin = Join-Path $XamppDir 'mysql\bin\mysqladmin.exe'
+
+$mysqlHidup = $false
+if (Test-Path $mysqladmin) {
+    $null = & $mysqladmin @koneksiArg ping 2>$null
+    $mysqlHidup = ($LASTEXITCODE -eq 0)
+} else {
+    $mysqlHidup = [bool](Test-NetConnection -ComputerName 127.0.0.1 -Port 3306 -InformationLevel Quiet -WarningAction SilentlyContinue)
+}
 
 $jumlahTabel = 0
-try {
+if (-not $mysqlHidup) {
+    Gagal "MySQL belum melayani - buka XAMPP Control Panel lalu klik Start pada MySQL, kemudian jalankan skrip ini lagi"
+} else {
+    Ok "MySQL melayani"
     $q = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DbName' AND table_name IN ('wa_sessions','wa_outbox','wa_messages','wa_clients','wa_settings','wa_logs','wa_users','wa_inbound');"
     $hasil = (& $mysql @koneksiArg -N -B -e $q) 2>$null
     $jumlahTabel = [int]($hasil | Select-Object -First 1)
-    if ($jumlahTabel -ge 8) { Ok "Skema database '$DbName' lengkap ($jumlahTabel tabel inti)" }
-} catch { }
 
-if ($jumlahTabel -lt 8) {
-    if ($CheckOnly) {
+    if ($jumlahTabel -ge 8) {
+        Ok "Skema database '$DbName' lengkap ($jumlahTabel tabel inti)"
+    } elseif ($CheckOnly) {
         Rencana "impor $schema ke database '$DbName' (tabel inti terdeteksi: $jumlahTabel/8)"
     } else {
         Tulis "  ... mengimpor skema database (membuat database bila belum ada)"
         Get-Content $schema -Raw | & $mysql @koneksiArg 2>&1 | Out-Null
         $cek = (& $mysql @koneksiArg -N -B -e $q) 2>$null
-        if ([int]($cek | Select-Object -First 1) -ge 8) { Ok "Skema database berhasil diimpor" } else { Gagal "Impor skema gagal - jalankan manual: `"$mysql`" $($koneksiArg -join ' ') < `"$schema`"" }
+        if ([int]($cek | Select-Object -First 1) -ge 8) {
+            Ok "Skema database berhasil diimpor"
+        } else {
+            Gagal "Impor skema gagal - jalankan manual: `"$mysql`" -u $DbUser < `"$schema`""
+        }
     }
 }
 
@@ -187,8 +204,17 @@ if (Test-Path $linkOk) {
 }
 
 # =====================================================================
-Judul " 7. LAYANAN WINDOWS (auto-start)"
+Judul " 7. AUTO-START (layanan Windows)"
 # =====================================================================
+# Engine WAJIB hidup tanpa jendela terbuka: kalau dijalankan dengan dobel klik
+# start-gateway.bat, dia mati saat sesi remote ditutup / server di-restart.
+# Dipakai NSSM bila tersedia; kalau tidak, pakai Task Scheduler bawaan Windows
+# (jadi tidak ada unduhan tambahan yang wajib).
+$runnerCmd = Join-Path $RepoDir 'run-engine.local.cmd'
+$taskAda = $false
+$null = schtasks.exe /query /tn $ServiceName 2>$null
+if ($LASTEXITCODE -eq 0) { $taskAda = $true }
+
 if ($SkipService) {
     Warn "dilewati (-SkipService). Jalankan manual: start-gateway.bat (tidak tahan logoff/restart!)"
 } else {
@@ -199,26 +225,43 @@ if ($SkipService) {
     $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
     if ($svc) {
-        Ok "layanan '$ServiceName' sudah terpasang (status: $($svc.Status))"
+        Ok "layanan Windows '$ServiceName' sudah terpasang (status: $($svc.Status))"
         if (-not $CheckOnly -and $svc.Status -ne 'Running') { Start-Service $ServiceName -ErrorAction SilentlyContinue }
-    } elseif (-not $nssm) {
-        Warn "nssm.exe tidak ditemukan di .\tools\ atau PATH"
-        Tulis "           Unduh https://nssm.cc/download -> taruh win64\nssm.exe di $RepoDir\tools\nssm.exe, lalu jalankan skrip ini lagi." DarkGray
+    } elseif ($taskAda) {
+        Ok "task auto-start '$ServiceName' sudah terpasang (Task Scheduler)"
     } elseif ($CheckOnly) {
-        Rencana "pasang layanan '$ServiceName' (NSSM: $NodeExe src/index.js di $engine) + set auto-start"
+        $cara = if ($nssm) { 'NSSM' } else { 'Task Scheduler (tanpa unduhan tambahan)' }
+        Rencana "pasang auto-start '$ServiceName' lewat $cara (menjalankan $NodeExe src/index.js di folder engine)"
     } else {
-        & $nssm install $ServiceName $NodeExe 'src/index.js' | Out-Null
-        & $nssm set $ServiceName AppDirectory $engine | Out-Null
-        & $nssm set $ServiceName AppStdout (Join-Path $logDir 'out.log') | Out-Null
-        & $nssm set $ServiceName AppStderr (Join-Path $logDir 'err.log') | Out-Null
-        & $nssm set $ServiceName AppRotateFiles 1 | Out-Null
-        & $nssm set $ServiceName Start SERVICE_AUTO_START | Out-Null
-        & $nssm set $ServiceName Description 'WA Gateway lokal (engine Baileys)' | Out-Null
-        Start-Service $ServiceName -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 4
-        $svc2 = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-        if ($svc2 -and $svc2.Status -eq 'Running') { Ok "layanan '$ServiceName' terpasang dan berjalan (auto-start)" }
-        else { Gagal "layanan terpasang tetapi tidak berjalan - lihat $logDir\err.log" }
+        # skrip peluncur dengan PATH absolut (akun SYSTEM sering tidak punya Node di PATH)
+        $isiRunner = "@echo off`r`nrem Dibuat otomatis oleh install-server.ps1. Jangan diubah manual.`r`n" +
+                     "cd /d `"$engine`"`r`n" +
+                     "`"$NodeExe`" src\index.js >> `"$logDir\out.log`" 2>&1`r`n"
+        Set-Content -Path $runnerCmd -Value $isiRunner -Encoding ASCII
+        Ok "peluncur dibuat: run-engine.local.cmd (berisi path node.exe absolut)"
+
+        if ($nssm) {
+            & $nssm install $ServiceName "$env:ComSpec" "/c `"$runnerCmd`"" | Out-Null
+            & $nssm set $ServiceName AppDirectory $engine | Out-Null
+            & $nssm set $ServiceName Start SERVICE_AUTO_START | Out-Null
+            & $nssm set $ServiceName Description 'WA Gateway lokal (engine Baileys)' | Out-Null
+            Start-Service $ServiceName -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 4
+            $svc2 = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($svc2 -and $svc2.Status -eq 'Running') { Ok "layanan '$ServiceName' berjalan (auto-start, via NSSM)" }
+            else { Gagal "layanan terpasang tetapi tidak berjalan - lihat $logDir\out.log" }
+        } else {
+            $arg = @('/create', '/tn', $ServiceName, '/tr', ('"' + $runnerCmd + '"'),
+                     '/sc', 'onstart', '/ru', 'SYSTEM', '/rl', 'HIGHEST', '/f')
+            $hasilSched = (& schtasks.exe @arg 2>&1) -join ' '
+            $null = schtasks.exe /query /tn $ServiceName 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Ok "auto-start '$ServiceName' dipasang lewat Task Scheduler (jalan sebagai SYSTEM saat Windows menyala)"
+                Tulis "           Mulai sekarang tanpa restart Windows: schtasks /run /tn $ServiceName" DarkGray
+            } else {
+                Gagal ("gagal memasang task auto-start: " + $hasilSched)
+            }
+        }
     }
 }
 
@@ -251,6 +294,10 @@ Judul " RINGKASAN "
 Tulis ("  pemeriksaan lulus : " + $script:lulus)
 if ($script:ingin -gt 0) { Tulis ("  tindakan tertunda : " + $script:ingin) Yellow }
 if ($script:gagal -gt 0) { Tulis ("  GAGAL             : " + $script:gagal) Red }
+if ($script:gagal -gt 0) {
+    Tulis ""
+    Tulis "  Perbaiki dulu hal bertanda [GAGAL] di atas, lalu jalankan berkas ini lagi (aman diulang)." Red
+}
 
 Tulis ""
 Tulis "  LANGKAH MANUAL BERIKUTNYA" White

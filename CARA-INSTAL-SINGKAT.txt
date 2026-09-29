@@ -1,0 +1,104 @@
+=========================================================================
+  CARA PEMASANGAN WA GATEWAY DI SERVER (versi singkat, 6 langkah)
+  Untuk server sekolah yang diakses lewat AnyDesk.
+  Versi lengkap + penjelasan: docs\INSTAL-SERVER.md
+=========================================================================
+
+Sebelum mulai, siapkan 2 hal ini (kalau belum ada di server):
+   1. XAMPP        -> https://www.apachefriends.org/download.html
+   2. Node.js LTS  -> https://nodejs.org  (pilih yang "LTS", centang "Add to PATH")
+   Setelah memasang, tutup dan buka ulang jendela yang sedang dipakai.
+
+
+--------------------------------------------------------------------
+LANGKAH 1 - Jalankan XAMPP
+--------------------------------------------------------------------
+   Buka "XAMPP Control Panel" di server.
+   Klik Start pada "Apache"  -> harus hijau.
+   Klik Start pada "MySQL"   -> harus hijau.
+
+   Kalau dua-duanya sudah hijau, lanjut.
+
+
+--------------------------------------------------------------------
+LANGKAH 2 - Ambil kodenya (sekali saja)
+--------------------------------------------------------------------
+   Buka "Command Prompt" (tombol Windows -> ketik cmd -> Enter), lalu
+   tempel perintah ini (satu per satu, tekan Enter setiap baris):
+
+       cd /d D:\
+       git clone https://github.com/fikrudzulfahmi/wa-gateway.git
+       cd wa-gateway
+
+   Kalau muncul "git tidak dikenal": pasang Git dari https://git-scm.com
+   lalu buka ulang Command Prompt.
+
+
+--------------------------------------------------------------------
+LANGKAH 3 - Periksa dulu (TIDAK mengubah apa pun)
+--------------------------------------------------------------------
+   Di jendela Command Prompt tadi, jalankan:
+
+       CEK-SERVER.bat
+
+   Baca hasilnya. Yang penting:
+       [ OK ]    Node.js v22..., PHP 8..., java: mysql.exe XAMPP
+       [ OK ]    Port 3306 melayani (XAMPP jalan)
+       [ OK ]    Port 80 melayani   (XAMPP jalan)
+       [AKAN]    ... artinya masih perlu dipasang (wajar di server baru)
+       [GAGAL]   ... artinya ada yang harus diperbaiki dulu
+
+   Kalau ada [GAGAL]: pasang dulu yang kurang (XAMPP / Node.js / Git),
+   lalu ulangi langkah ini. Jangan lanjut kalau masih ada [GAGAL].
+
+
+--------------------------------------------------------------------
+LANGKAH 4 - Pasang (dobel klik, jawab "Yes" bila diminta)
+--------------------------------------------------------------------
+   Dobel klik berkas:
+
+       PASANG-GATEWAY.bat
+
+   Windows akan minta izin Administrator -> klik "Yes".
+   Tunggu 1-3 menit. Kalau muncul "[ OK ]" semua di akhir, artinya selesai.
+   Muncul "[WARN]" tidak apa-apa (hanya saran), "[GAGAL]" yang tidak boleh.
+
+
+--------------------------------------------------------------------
+LANGKAH 5 - Pindai QR WhatsApp
+--------------------------------------------------------------------
+   1. Di server, buka browser:  http://localhost/wa-gateway
+   2. Login:  admin  /  admin123
+   3. Panel kanan "Scan QR" menampilkan gambar QR.
+   4. Di HP: WhatsApp -> Perangkat tertaut -> Tautkan perangkat
+      -> arahkan kamera ke QR di layar server.
+      (Di AnyDesk, set kualitas layar "Best quality" supaya QR jelas.)
+   5. Bila berhasil: status berubah menjadi "Tersambung" + nomor tampil.
+   6. Uji: menu "Kirim Pesan" -> kirim ke nomor HP Anda sendiri.
+   7. Ganti password: menu "Pengaturan".
+
+
+--------------------------------------------------------------------
+LANGKAH 6 - Cek sudah benar-benar jalan
+--------------------------------------------------------------------
+   Dobel klik:  CEK-SERVER.bat   lagi.
+   Bagian "VERIFIKASI AKHIR" harus menampilkan:
+       [ OK ]  engine menjawab: ok=true, ... tersambung=1
+       [ OK ]  dashboard menjawab di http://localhost/wa-gateway
+
+   Selesai. Server boleh ditutup sesi AnyDesk-nya; gateway tetap jalan
+   sendiri (sudah dipasang sebagai auto-start Windows).
+
+
+=========================================================================
+  KALAU ADA MASALAH - kirimkan hasil CEK-SERVER.bat (tangkapan layar)
+=========================================================================
+  Ini yang paling membantu, jangan diketik ulang manual.
+
+   "engine belum menjawab"        -> jalankan: schtasks /run /tn WAGateway
+   "dashboard belum bisa dibuka"  -> XAMPP: Start Apache, cek junction
+                                     C:\xampp\htdocs\wa-gateway
+   Status WA terus "Perlu Scan QR" -> ulangi Langkah 5; pastikan internet
+                                     server bisa buka web.whatsapp.com
+   Semua pesan menumpuk di Antrean -> cek menu Pengaturan dan status sesi
+=========================================================================
