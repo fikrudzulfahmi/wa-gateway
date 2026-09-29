@@ -30,6 +30,9 @@ LANGKAH 2 - Ambil kodenya (sekali saja)
        git clone https://github.com/fikrudzulfahmi/wa-gateway.git
        cd wa-gateway
 
+   Folder hasilnya: D:\wa-gateway  (semua langkah berikutnya dijalankan
+   dari folder ini; boleh dipindah, asal perintah dijalankan di folder itu)
+
    Kalau muncul "git tidak dikenal": pasang Git dari https://git-scm.com
    lalu buka ulang Command Prompt.
 
