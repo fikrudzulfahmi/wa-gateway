@@ -10,6 +10,10 @@ const enabled = () => (config.pullAck ? true : false);
 const PULL_ERR_LOG_INTERVAL = 5 * 60 * 1000;
 const pullErrThrottle = new Map(); // client_id -> { msg, at }
 
+/** Jeda minimum antar percobaan lapor-balik ulang untuk job yang sudah pernah ditarik. */
+const ACK_ULANG_INTERVAL = 5 * 60 * 1000;
+const ackUlangThrottle = new Map(); // client_id -> waktu percobaan terakhir
+
 function httpClient() {
   return axios.create({ timeout: 20000, headers: { Accept: 'application/json' } });
 }
@@ -60,10 +64,22 @@ export async function pullFromClient(client, sessions) {
   const sessionId = client.session_id ?? [...sessions.values()][0]?.id ?? null;
 
   let inserted = 0;
+  let duplikat = 0;
+  // Lapor balik untuk job yang sudah pernah ditarik: dilakukan ulang (maks. tiap 5 menit)
+  // supaya aplikasi menyusul bila ack sebelumnya gagal - mis. karena path laporan balik
+  // sempat salah. Tanpa ini, baris di aplikasi menggantung 'pending' selamanya dan
+  // terus disajikan tiap siklus (gateway memang tidak mengirim ulang, jadi aman).
+  const bolehAckUlang =
+    enabled() && Date.now() - (ackUlangThrottle.get(client.id) ?? 0) >= ACK_ULANG_INTERVAL;
+
   for (const job of jobs) {
     if (job.ref) {
       const dup = await one('SELECT id FROM wa_outbox WHERE client_id = ? AND ref = ? LIMIT 1', [client.id, job.ref]);
-      if (dup) continue;
+      if (dup) {
+        duplikat += 1;
+        if (bolehAckUlang) await ackToClient(null, 'queued', { ref: job.ref, client });
+        continue;
+      }
     }
     await q(
       `INSERT INTO wa_outbox (session_id, client_id, source, ref, to_number, type, body, media_url, filename, scheduled_at, status)
@@ -73,6 +89,18 @@ export async function pullFromClient(client, sessions) {
     inserted += 1;
     // Kabari aplikasi bahwa job sudah diambil, supaya tidak dikirim ulang oleh siklus berikutnya
     if (job.ref && enabled()) await ackToClient(null, 'queued', { ref: job.ref, client });
+  }
+
+  if (duplikat > 0 && bolehAckUlang) {
+    ackUlangThrottle.set(client.id, Date.now());
+    await dbLog(
+      'warning',
+      'pull_duplikat',
+      `${duplikat} job dari ${client.name} sudah pernah ditarik: TIDAK dikirim ulang, laporan balik dicoba lagi ` +
+        '(bila berulang terus, periksa kolom "Path laporan balik" aplikasi itu)',
+      null,
+      sessionId
+    );
   }
 
   await q(
