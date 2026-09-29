@@ -50,7 +50,7 @@ WhatsApp dan penarikan pesan dari hosting berjalan lewat HTTPS. Jaringan sekolah
 
 ```powershell
 Test-NetConnection web.whatsapp.com -Port 443              # WhatsApp (koneksi engine)
-Test-NetConnection siber.pondokminggirsari.com -Port 443   # hosting aplikasi (mode PULL)
+Test-NetConnection domain-sample.com -Port 443             # hosting aplikasi (mode PULL)
 Test-NetConnection github.com -Port 443                    # unduh kode
 ```
 

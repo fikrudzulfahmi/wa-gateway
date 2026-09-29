@@ -90,8 +90,8 @@ Di dashboard → menu **Aplikasi Hosting → Tambah aplikasi**:
 
 | Kolom | Isi |
 |---|---|
-| Nama aplikasi | mis. `SIBER` |
-| Base URL | alamat aplikasi, **tanpa** garis miring di akhir, mis. `https://siber.pondokminggirsari.com` |
+| Nama aplikasi | mis. `Aplikasi Sekolah` |
+| Base URL | alamat aplikasi, **tanpa** garis miring di akhir, mis. `https://domain-sample.com` |
 | Path daftar pesan | path berkas yang benar-benar ada, mis. **`/wa-gateway/jobs.php`** |
 | Path laporan balik | mis. **`/wa-gateway/ack.php`** |
 | Sesi WA | `(otomatis: sesi pertama)` |

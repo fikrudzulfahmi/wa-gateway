@@ -51,7 +51,8 @@ pemilik data. Langkahnya (aman, hanya salinan lokal):
 1. Salin salah satu cronjob ke `tests/siber-integration/tmp/` dengan kredensial lokal
    (`dbName=siber_prod_copy`, `dbUser=root`, `dbPass=''`) dan salin juga `_wa_outbox.php`
    ke folder yang sama (berkas cronjob memanggil `require_once __DIR__ . '/_wa_outbox.php'`).
-2. Jalankan: `php -r '$_GET["key"]="SiberRM_svbndks987839432"; include "…/tmp/local_rekap_walas.php";'`
+2. Jalankan: `php -r '$_GET["key"]="KUNCI-CRONJOB-ANDA"; include "…/tmp/local_rekap_walas.php";'`
+   (kunci asli cukup diketahui dari `_config.php`/URL cronjob Anda — jangan ditulis di repo)
 3. Cek `outbox_wa`: baris baru berstatus `pending` dengan nomor sudah `62xx`.
 4. Tarik dari gateway: tombol **Tarik job sekarang** di menu *Aplikasi Hosting* (atau
    `POST /api/pull-now` dengan header `X-Token`).
