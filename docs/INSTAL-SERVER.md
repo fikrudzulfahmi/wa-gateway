@@ -180,7 +180,7 @@ netstat -ano | findstr ":80 " | findstr LISTENING
 
 ---
 
-## 8. Menghubungkan aplikasi hosting (mis. SIBER)
+## 8. Menghubungkan aplikasi hosting (mis. aplikasi sekolah — PHP native / Laravel)
 
 1. Ambil **token** aplikasi: dashboard → menu **Aplikasi Hosting**. Kalau belum ada, tambahkan
    (nama, base URL tanpa `/` di akhir, path `/wa-gateway/jobs.php` dan `/wa-gateway/ack.php`,
