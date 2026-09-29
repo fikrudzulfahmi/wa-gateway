@@ -21,16 +21,8 @@ if %errorlevel% neq 0 (
 
 :jalan
 
-echo ==========================================================
-echo   MEMASANG WA GATEWAY DI SERVER INI
-echo   Ikuti saja sampai selesai ^(1-3 menit^).
-echo ==========================================================
-echo.
-
+rem Header, ringkasan, dan langkah lanjutan dicetak oleh install-server.ps1
+rem (jangan diduplikasi di sini - satu sumber kebenaran).
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-server.ps1" %*
 echo.
-echo ==========================================================
-echo   SELESAI. Baca "LANGKAH MANUAL BERIKUTNYA" di atas.
-echo   Buka http://localhost/wa-gateway lalu pindai QR.
-echo ==========================================================
 pause

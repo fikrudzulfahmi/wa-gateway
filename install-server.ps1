@@ -268,24 +268,23 @@ if ($SkipService) {
 # =====================================================================
 Judul " 8. VERIFIKASI AKHIR"
 # =====================================================================
-if (-not $CheckOnly) {
-    Start-Sleep -Seconds 3
-    try {
-        $h = Invoke-RestMethod -Uri 'http://127.0.0.1:3001/api/health' -TimeoutSec 8
-        if ($h.ok) { Ok ("engine menjawab: ok=true, sesi=$($h.sessions_total), tersambung=$($h.sessions_connected)") }
-        else { Warn "engine menjawab tetapi ok=false" }
-    } catch {
-        Warn "engine belum menjawab di 127.0.0.1:3001 - jalankan: nssm restart $ServiceName (atau start-gateway.bat)"
-    }
-    try {
-        $r = Invoke-WebRequest -Uri 'http://localhost/wa-gateway/index.php?page=login' -UseBasicParsing -TimeoutSec 8
-        if ($r.StatusCode -eq 200 -and $r.Content -match 'name="password"') { Ok "dashboard menjawab di http://localhost/wa-gateway" }
-        else { Warn "dashboard menjawab tak terduga (HTTP $($r.StatusCode))" }
-    } catch {
-        Warn "dashboard belum bisa dibuka - pastikan Apache jalan dan junction sudah dibuat"
-    }
-} else {
-    Tulis "  (mode periksa: verifikasi runtime dilewati)" DarkGray
+# READ-ONLY (hanya HTTP GET) -> dijalankan juga pada mode -CheckOnly, karena
+# "engine menjawab?" dan "dashboard terbuka?" justru yang paling dibutuhkan saat
+# memeriksa masalah di server.
+if (-not $CheckOnly) { Start-Sleep -Seconds 3 }
+try {
+    $h = Invoke-RestMethod -Uri 'http://127.0.0.1:3001/api/health' -TimeoutSec 8
+    if ($h.ok) { Ok ("engine menjawab: ok=true, sesi=$($h.sessions_total), tersambung=$($h.sessions_connected)") }
+    else { Warn "engine menjawab tetapi ok=false" }
+} catch {
+    Warn "engine belum menjawab di 127.0.0.1:3001 - jalankan: schtasks /run /tn $ServiceName (atau start-gateway.bat)"
+}
+try {
+    $r = Invoke-WebRequest -Uri 'http://localhost/wa-gateway/index.php?page=login' -UseBasicParsing -TimeoutSec 8
+    if ($r.StatusCode -eq 200 -and $r.Content -match 'name="password"') { Ok "dashboard menjawab di http://localhost/wa-gateway" }
+    else { Warn "dashboard menjawab tak terduga (HTTP $($r.StatusCode))" }
+} catch {
+    Warn "dashboard belum bisa dibuka - pastikan Apache jalan dan junction htdocs\wa-gateway sudah dibuat"
 }
 
 # =====================================================================
