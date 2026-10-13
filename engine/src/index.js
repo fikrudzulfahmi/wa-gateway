@@ -24,6 +24,20 @@ const sessions = new Map();
 // ---------------------------------------------------------------------------
 const lockFile = path.join(process.cwd(), '.engine.lock');
 
+/**
+ * Menulis pesan penting ke stderr secara SINKRON.
+ * `console.error` + `process.exit()` bisa memotong pesan ketika keluaran dialihkan ke
+ * pipa/berkas (mis. dijalankan lewat NSSM, Task Scheduler, atau skrip uji) - tepat saat
+ * pesan itu paling dibutuhkan. fs.writeSync dijamin tertulis sebelum proses berhenti.
+ */
+function pesanPenting(teks) {
+  try {
+    fs.writeSync(2, `${teks}\n`);
+  } catch {
+    console.error(teks);
+  }
+}
+
 function pemilikKunci() {
   try {
     const isi = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
@@ -38,15 +52,15 @@ function pemilikKunci() {
 function pasangKunci() {
   const lama = pemilikKunci();
   if (lama) {
-    console.error('');
-    console.error('================ ENGINE LAIN SEDANG JALAN ================');
-    console.error(` PID ${lama.pid} (mulai ${lama.started ?? '?'}) sudah memakai sesi WhatsApp ini.`);
-    console.error(' Dua engine membuat sesi saling tendang (log: connectionReplaced),');
-    console.error(' koneksi tidak stabil, dan pesan bisa terkirim dobel.');
-    console.error(' Periksa   : tasklist | findstr /i node.exe');
-    console.error(' Matikan   : taskkill /F /PID <pid>   (atau tutup jendela engine yang lain)');
-    console.error(' Engine INI berhenti sendiri agar tidak menambah kekacauan.');
-    console.error('=========================================================');
+    pesanPenting('');
+    pesanPenting('================ ENGINE LAIN SEDANG JALAN ================');
+    pesanPenting(` PID ${lama.pid} (mulai ${lama.started ?? '?'}) sudah memakai sesi WhatsApp ini.`);
+    pesanPenting(' Dua engine membuat sesi saling tendang (log: connectionReplaced),');
+    pesanPenting(' koneksi tidak stabil, dan pesan bisa terkirim dobel.');
+    pesanPenting(' Periksa   : tasklist | findstr /i node.exe');
+    pesanPenting(' Matikan   : taskkill /F /PID <pid>   (atau tutup jendela engine yang lain)');
+    pesanPenting(' Engine INI berhenti sendiri agar tidak menambah kekacauan.');
+    pesanPenting('=========================================================');
     process.exit(1);
   }
   fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString(), port: config.port }));
@@ -115,10 +129,10 @@ async function main() {
   // bukan dibiarkan jalan tanpa API - itu dulu membuat dua engine hidup bersamaan.
   server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.error(`[FATAL] port ${config.port} sudah dipakai proses lain - kemungkinan engine lain masih jalan.`);
-      console.error(`        Periksa: netstat -ano | findstr :${config.port}   lalu matikan proses itu.`);
+      pesanPenting(`[FATAL] port ${config.port} sudah dipakai proses lain - kemungkinan engine lain masih jalan.`);
+      pesanPenting(`        Periksa: netstat -ano | findstr :${config.port}   lalu matikan proses itu.`);
     } else {
-      console.error('[FATAL] server API gagal:', e.message);
+      pesanPenting(`[FATAL] server API gagal: ${e.message}`);
     }
     lepasKunci();
     process.exit(1);
@@ -157,7 +171,7 @@ async function main() {
 }
 
 main().catch(async (e) => {
-  console.error('[FATAL]', e.message);
+  pesanPenting(`[FATAL] ${e.message}`);
   try {
     await dbLog('error', 'boot_failed', e.message);
   } catch { /* DB mungkin belum siap */ }
