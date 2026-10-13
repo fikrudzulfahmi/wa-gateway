@@ -2,6 +2,8 @@
 // supaya cetakan langsung dari libsignal (Bad MAC / Failed to decrypt) ikut tersaring.
 import './logfilter.js';
 import { config } from './config.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { q, one, dbPing, dbLog, setSetting, getSetting } from './db.js';
 import { WaSession } from './session.js';
 import { createApi } from './api.js';
@@ -10,6 +12,52 @@ import { startPuller } from './puller.js';
 import { bus } from './bus.js';
 
 const sessions = new Map();
+
+// ---------------------------------------------------------------------------
+// Pengaman SATU INSTANCE.
+// Di Windows, dua proses BISA sama-sama mengikat port yang sama - jadi port saja
+// tidak cukup untuk mencegah engine jalan dobel. Dua engine yang memakai SESI
+// WhatsApp yang sama akan saling menendang tanpa henti (WhatsApp melaporkan
+// "connectionReplaced"), koneksi jadi tidak stabil, dan pesan berisiko terkirim
+// dobel. Karena itu engine menandai dirinya di berkas kunci berisi PID, dan
+// menolak jalan bila pemilik kunci sebelumnya masih hidup.
+// ---------------------------------------------------------------------------
+const lockFile = path.join(process.cwd(), '.engine.lock');
+
+function pemilikKunci() {
+  try {
+    const isi = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+    if (!isi?.pid) return null;
+    process.kill(Number(isi.pid), 0); // melempar bila prosesnya sudah tidak ada
+    return isi;
+  } catch {
+    return null; // berkas tidak ada, isinya rusak, atau prosesnya sudah mati
+  }
+}
+
+function pasangKunci() {
+  const lama = pemilikKunci();
+  if (lama) {
+    console.error('');
+    console.error('================ ENGINE LAIN SEDANG JALAN ================');
+    console.error(` PID ${lama.pid} (mulai ${lama.started ?? '?'}) sudah memakai sesi WhatsApp ini.`);
+    console.error(' Dua engine membuat sesi saling tendang (log: connectionReplaced),');
+    console.error(' koneksi tidak stabil, dan pesan bisa terkirim dobel.');
+    console.error(' Periksa   : tasklist | findstr /i node.exe');
+    console.error(' Matikan   : taskkill /F /PID <pid>   (atau tutup jendela engine yang lain)');
+    console.error(' Engine INI berhenti sendiri agar tidak menambah kekacauan.');
+    console.error('=========================================================');
+    process.exit(1);
+  }
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString(), port: config.port }));
+}
+
+function lepasKunci() {
+  try {
+    const isi = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+    if (Number(isi?.pid) === process.pid) fs.rmSync(lockFile, { force: true });
+  } catch { /* berkas sudah tidak ada - abaikan */ }
+}
 
 async function ensureSchema() {
   const row = await one(
@@ -33,6 +81,8 @@ async function loadSessions() {
 
 async function main() {
   console.log('================ WA GATEWAY LOKAL ================');
+  pasangKunci(); // tolak jalan bila engine lain masih memakai sesi yang sama
+  process.on('exit', lepasKunci);
   await dbPing();
   await ensureSchema();
 
@@ -61,6 +111,19 @@ async function main() {
     dbLog('info', 'engine_ready', `engine jalan di ${config.host}:${config.port}`);
   });
 
+  // Port gagal diikat (mis. masih dipegang engine lama) harus MENGHENTIKAN engine ini,
+  // bukan dibiarkan jalan tanpa API - itu dulu membuat dua engine hidup bersamaan.
+  server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+      console.error(`[FATAL] port ${config.port} sudah dipakai proses lain - kemungkinan engine lain masih jalan.`);
+      console.error(`        Periksa: netstat -ano | findstr :${config.port}   lalu matikan proses itu.`);
+    } else {
+      console.error('[FATAL] server API gagal:', e.message);
+    }
+    lepasKunci();
+    process.exit(1);
+  });
+
   const stopSender = startSender(sessions);
   const stopPuller = startPuller(sessions);
 
@@ -83,6 +146,7 @@ async function main() {
     stopSender();
     stopPuller();
     server.close();
+    lepasKunci();
     await dbLog('info', 'engine_stop', 'engine dihentikan');
     process.exit(0);
   };

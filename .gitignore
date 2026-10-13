@@ -10,6 +10,7 @@ engine/.env.local
 # --- KUNCI AKUN WHATSAPP: folder sesi Baileys ---
 # Hilang = harus memindai QR ulang. Jangan pernah dibagikan.
 engine/sessions/
+engine/.engine.lock
 
 # --- data lokal & unggahan ---
 engine/logs/

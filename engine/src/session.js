@@ -175,12 +175,35 @@ export class WaSession {
       // sebagai last_error membuat dashboard menampilkan pesan error palsu tepat saat user
       // hendak memindai QR. Jadi hanya catat error untuk sesi yang sudah pernah tersambung.
       const belumPernahDipindai = !this.phone && code !== DisconnectReason.loggedOut;
-      if (belumPernahDipindai) {
+
+      // "connectionReplaced" = sesi ini sedang dipakai proses LAIN (dua engine dengan
+      // kredensial yang sama saling menendang). Ini BUKAN gangguan jaringan biasa dan
+      // harus terlihat jelas, baik di jendela engine maupun di dashboard.
+      const tersalipEngineLain = code === DisconnectReason.connectionReplaced;
+      if (tersalipEngineLain) {
+        console.warn(
+          `[PENTING] sesi "${this.name}" diambil alih PROSES LAIN. Pastikan hanya SATU engine yang jalan:\n` +
+            '          tasklist | findstr /i node.exe     (harus 1 proses)\n' +
+            '          tutup/matikan engine yang berlebih, sisakan satu.'
+        );
+        await q('UPDATE wa_sessions SET last_error = ? WHERE name = ?', [
+          'Sesi ini sedang dipakai ENGINE LAIN - dua engine saling tendang (koneksi tidak stabil, pesan bisa dobel). Tutup salah satu engine.',
+          this.name,
+        ]);
+      } else if (belumPernahDipindai) {
         await q('UPDATE wa_sessions SET last_error = NULL WHERE name = ?', [this.name]);
       } else {
         await q('UPDATE wa_sessions SET last_error = ? WHERE name = ?', [String(errMsg).slice(0, 255), this.name]);
       }
-      dbLog(code === DisconnectReason.loggedOut ? 'warning' : 'info', 'disconnected', `sesi "${this.name}" terputus (${reason})`, null, this.id);
+      dbLog(
+        code === DisconnectReason.loggedOut || tersalipEngineLain ? 'warning' : 'info',
+        'disconnected',
+        tersalipEngineLain
+          ? `sesi "${this.name}" TERSALIP proses lain (${reason}) - pastikan HANYA SATU engine memakai sesi ini`
+          : `sesi "${this.name}" terputus (${reason})`,
+        null,
+        this.id
+      );
 
       if (code === DisconnectReason.loggedOut) {
         // Sesi dicabut dari HP -> folder auth dibuang supaya bisa scan QR baru
