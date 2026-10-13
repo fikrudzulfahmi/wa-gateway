@@ -33,3 +33,6 @@ tests/siber-integration/tmp/
 # --- dibuat otomatis oleh install-server.ps1 (berisi path khusus mesin ini) ---
 run-engine.local.cmd
 tools/
+
+# snapshot lokal (Hermes)
+backup/
