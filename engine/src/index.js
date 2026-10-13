@@ -4,6 +4,7 @@ import './logfilter.js';
 import { config } from './config.js';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { q, one, dbPing, dbLog, setSetting, getSetting } from './db.js';
 import { WaSession } from './session.js';
 import { createApi } from './api.js';
@@ -22,7 +23,9 @@ const sessions = new Map();
 // dobel. Karena itu engine menandai dirinya di berkas kunci berisi PID, dan
 // menolak jalan bila pemilik kunci sebelumnya masih hidup.
 // ---------------------------------------------------------------------------
-const lockFile = path.join(process.cwd(), '.engine.lock');
+// Berkas kunci dipatok ke folder ENGINE (bukan cwd) supaya selalu ditemukan di tempat
+// yang sama, apa pun folder kerja saat engine dijalankan (pintasan, layanan, skrip).
+const lockFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.engine.lock');
 
 /**
  * Menulis pesan penting ke stderr secara SINKRON.

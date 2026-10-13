@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,12 @@ import crypto from 'node:crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ENGINE_ROOT = path.resolve(__dirname, '..');
+
+// .env SELALU dibaca dari folder engine (bukan folder kerja saat ini).
+// Kalau memakai `dotenv/config` biasa, engine hanya benar bila dijalankan dengan cwd
+// = folder engine - lewat pintasan/layanan yang salah cwd, konfigurasi tidak terbaca
+// dan engine gagal boot dengan pesan yang membingungkan (mis. "Access denied ...").
+dotenv.config({ path: path.join(ENGINE_ROOT, '.env') });
 
 const int = (v, d) => {
   const n = parseInt(v ?? '', 10);
