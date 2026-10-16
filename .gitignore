@@ -36,3 +36,6 @@ tools/
 
 # snapshot lokal (Hermes)
 backup/
+
+# dependensi uji lokal
+engine/node_modules

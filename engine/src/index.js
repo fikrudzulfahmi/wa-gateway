@@ -89,6 +89,24 @@ async function ensureSchema() {
   }
 }
 
+/**
+ * PEMULIHAN SAAT BOOT: baris lokal berstatus 'sending' (engine mati / listrik
+ * putus tepat saat mengirim) hanya diambil worker bila statusnya 'queued'.
+ * Tanpa pemulihan ini baris itu menggantung selamanya dan pesannya tidak pernah
+ * terkirim. Dikembalikan ke 'queued' supaya dicoba lagi — aman terhadap dobel
+ * kirim karena anti-duplikat `ref` ada di sisi aplikasi hosting.
+ */
+async function pulihkanAntreanMacet() {
+  const hasil = await q(
+    "UPDATE wa_outbox SET status = 'queued', last_error = 'dipulihkan saat boot engine' WHERE status = 'sending'"
+  );
+  const jml = Number(hasil?.affectedRows ?? 0);
+  if (jml > 0) {
+    await dbLog('warning', 'pulih_sending', `${jml} pesan berstatus 'sending' dipulihkan ke 'queued' saat boot engine`, null, null);
+  }
+  return jml;
+}
+
 async function loadSessions() {
   const rows = await q('SELECT * FROM wa_sessions ORDER BY id');
   for (const row of rows) sessions.set(row.name, new WaSession(row));
@@ -102,6 +120,7 @@ async function main() {
   process.on('exit', lepasKunci);
   await dbPing();
   await ensureSchema();
+  await pulihkanAntreanMacet();
 
   // Token engine disimpan juga di DB supaya dashboard PHP bisa membacanya
   const dbToken = await getSetting('engine_token');

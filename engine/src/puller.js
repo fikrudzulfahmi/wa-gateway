@@ -33,6 +33,17 @@ function normalizeJob(raw) {
 }
 
 /**
+ * Petakan status lokal wa_outbox -> status yang dikenal aplikasi hosting.
+ * Dipakai saat sebuah job sudah pernah ditarik: aplikasi menerima status AKTUAL
+ * baris itu (mis. 'sent' bila ack sebelumnya hilang), bukan selalu 'queued'.
+ */
+function statusUntukKlien(status) {
+  if (['sent', 'delivered', 'read', 'played'].includes(status)) return 'sent';
+  if (['failed', 'cancelled'].includes(status)) return 'failed';
+  return 'queued';
+}
+
+/**
  * Tarik job dari satu aplikasi hosting (mode PULL).
  * Kontrak: GET {base_url}{jobs_path}?limit=n  + header X-Gateway-Token
  *          Respons JSON: { data: [ { id, to, type, body, media_url } ] }
@@ -60,24 +71,68 @@ export async function pullFromClient(client, sessions) {
     );
   }
 
-  const jobs = list.map(normalizeJob).filter((j) => j.to_number && j.valid);
-  const sessionId = client.session_id ?? [...sessions.values()][0]?.id ?? null;
+  const jobs = list.map(normalizeJob);
+
+  // Job yang nomornya tidak bisa dipakai WhatsApp (kosong / di luar 9–15 digit)
+  // TIDAK lagi dibuang diam-diam: dulu barisnya tetap 'pending' selamanya di
+  // aplikasi dan — karena aplikasi mengambil 20 baris terdepan — menyumbat
+  // antrean sehingga pesan baru tidak pernah tertarik. Sekarang dilaporkan
+  // 'failed' supaya keluar dari antrean.
+  const ditolak = jobs.filter((j) => !j.to_number || !j.valid);
+  const layak = jobs.filter((j) => j.to_number && j.valid);
+
+  // Sesi WA yang dipakai untuk pesan-pesan ini. Kalau TIDAK ada sesi sama
+  // sekali, pull dibatalkan: wa_outbox.session_id NOT NULL + ber-FK, sehingga
+  // INSERT akan gagal dan seluruh siklus pull batal (antrean aplikasi tetap
+  // 'pending' tanpa sebab yang kelihatan di dashboard).
+  let sessionId = client.session_id ? Number(client.session_id) : null;
+  if (sessionId && !(await one('SELECT id FROM wa_sessions WHERE id = ?', [sessionId]))) sessionId = null;
+  if (!sessionId) sessionId = [...sessions.values()][0]?.id ?? null;
+  if (!sessionId) {
+    const pesanLewat = 'tidak ada sesi WA terdaftar di wa_sessions — pull dilewati sampai ada sesi';
+    await q('UPDATE wa_clients SET last_error = ? WHERE id = ?', [pesanLewat, client.id]);
+    await dbLog('warning', 'pull_dilewati', `${client.name}: ${pesanLewat}`, null, null);
+    return 0;
+  }
 
   let inserted = 0;
   let duplikat = 0;
-  // Lapor balik untuk job yang sudah pernah ditarik: dilakukan ulang (maks. tiap 5 menit)
-  // supaya aplikasi menyusul bila ack sebelumnya gagal - mis. karena path laporan balik
-  // sempat salah. Tanpa ini, baris di aplikasi menggantung 'pending' selamanya dan
-  // terus disajikan tiap siklus (gateway memang tidak mengirim ulang, jadi aman).
+  let ditolakCount = 0;
+
+  // Peredam log saja: ack untuk job yang sudah pernah ditarik SELALU dikirim
+  // (endpoint ack idempoten), tetapi barisnya tidak dicatat berulang.
   const bolehAckUlang =
     enabled() && Date.now() - (ackUlangThrottle.get(client.id) ?? 0) >= ACK_ULANG_INTERVAL;
 
-  for (const job of jobs) {
+  for (const bad of ditolak) {
+    ditolakCount += 1;
+    if (bad.ref && enabled()) {
+      await ackToClient(null, 'failed', {
+        ref: bad.ref,
+        client,
+        error: 'nomor tujuan tidak valid untuk WhatsApp (harus 9-15 digit, format 62xxx)',
+      });
+    }
+  }
+
+  for (const job of layak) {
     if (job.ref) {
-      const dup = await one('SELECT id FROM wa_outbox WHERE client_id = ? AND ref = ? LIMIT 1', [client.id, job.ref]);
+      const dup = await one(
+        'SELECT id, status FROM wa_outbox WHERE client_id = ? AND ref = ? LIMIT 1',
+        [client.id, job.ref]
+      );
       if (dup) {
         duplikat += 1;
-        if (bolehAckUlang) await ackToClient(null, 'queued', { ref: job.ref, client });
+        // Sudah pernah ditarik: laporkan status AKTUAL baris itu, bukan selalu
+        // 'queued'. Bila ack sebelumnya hilang padahal pesannya sudah terkirim,
+        // aplikasi kini ikut menyusul jadi 'sent' (memulihkan sendiri).
+        if (enabled()) {
+          await ackToClient(null, statusUntukKlien(dup.status), {
+            ref: job.ref,
+            client,
+            error: dup.status === 'failed' ? 'pengiriman sebelumnya gagal di gateway' : null,
+          });
+        }
         continue;
       }
     }
@@ -91,12 +146,22 @@ export async function pullFromClient(client, sessions) {
     if (job.ref && enabled()) await ackToClient(null, 'queued', { ref: job.ref, client });
   }
 
+  if (ditolakCount > 0) {
+    await dbLog(
+      'warning',
+      'pull_ditolak',
+      `${ditolakCount} job dari ${client.name} ditolak (nomor tidak valid) dan sudah dilaporkan 'failed' supaya tidak menggantung di antrean aplikasi`,
+      null,
+      sessionId
+    );
+  }
+
   if (duplikat > 0 && bolehAckUlang) {
     ackUlangThrottle.set(client.id, Date.now());
     await dbLog(
       'warning',
       'pull_duplikat',
-      `${duplikat} job dari ${client.name} sudah pernah ditarik: TIDAK dikirim ulang, laporan balik dicoba lagi ` +
+      `${duplikat} job dari ${client.name} sudah pernah ditarik: TIDAK dikirim ulang, status aktualnya dilaporkan balik ` +
         '(bila berulang terus, periksa kolom "Path laporan balik" aplikasi itu)',
       null,
       sessionId
@@ -105,7 +170,11 @@ export async function pullFromClient(client, sessions) {
 
   await q(
     `UPDATE wa_clients SET last_pull_at = NOW(), last_pull_status = ?, pulled_count = pulled_count + ?, last_error = NULL WHERE id = ?`,
-    [`ok:${inserted}`, inserted, client.id]
+    [
+      `ok:${inserted}${ditolakCount ? ` ditolak:${ditolakCount}` : ''}${duplikat ? ` duplikat:${duplikat}` : ''}`,
+      inserted,
+      client.id,
+    ]
   );
   if (inserted > 0) {
     bus.publish('pull', { client: client.name, inserted });
@@ -114,8 +183,26 @@ export async function pullFromClient(client, sessions) {
   return inserted;
 }
 
+/** Kunci siklus tarik: cegah dua penarikan berbarengan (mis. tombol "Tarik sekarang"
+ *  ditekan saat loop otomatis sedang jalan). Dua siklus bersamaan menarik job yang
+ *  sama sebelum ack selesai -> berisiko pesan terkirim dobel. */
+let sedangPull = false;
+
 /** Ambil semua klien aktif lalu tarik job-nya (dipanggil berkala). */
 export async function pullAll(sessions) {
+  if (sedangPull) {
+    console.log('[info] siklus tarik sebelumnya belum selesai — siklus ini dilewati');
+    return 0;
+  }
+  sedangPull = true;
+  try {
+    return await pullAllDalam(sessions);
+  } finally {
+    sedangPull = false;
+  }
+}
+
+async function pullAllDalam(sessions) {
   if ((await getSetting('worker_enabled', '1')) !== '1') return 0;
   const clients = await q('SELECT * FROM wa_clients WHERE is_active = 1');
   let total = 0;

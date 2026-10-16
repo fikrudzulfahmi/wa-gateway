@@ -126,10 +126,25 @@ async function processOne(sessions) {
     if (msgId) {
       await q('UPDATE wa_messages SET status="failed", error=? WHERE id=?', [emsg, msgId]);
     }
-    await q(
-      `UPDATE wa_outbox SET status = ?, retry_count = ?, last_error = ? WHERE id = ?`,
-      [giveUp ? 'failed' : 'queued', retryCount, emsg, job.id]
-    );
+    // Jeda bertingkat sebelum percobaan berikutnya (retry 1 -> 30 detik, dst.,
+    // maksimal 5 menit). Tanpa ini pesan gagal langsung dicoba ulang tiap tick
+    // (2 detik) sehingga nomor bermasalah membombardir WhatsApp dan menghabiskan
+    // kuota harian sesi.
+    const statusBaru = giveUp ? 'failed' : 'queued';
+    const tundaDetik = Math.min(300, retryCount * 30);
+    if (giveUp) {
+      await q(
+        `UPDATE wa_outbox SET status = ?, retry_count = ?, last_error = ? WHERE id = ?`,
+        [statusBaru, retryCount, emsg, job.id]
+      );
+    } else {
+      await q(
+        `UPDATE wa_outbox
+            SET status = ?, retry_count = ?, last_error = ?, scheduled_at = NOW() + INTERVAL ? SECOND
+          WHERE id = ?`,
+        [statusBaru, retryCount, emsg, tundaDetik, job.id]
+      );
+    }
     bus.publish('status', { outbox_id: job.id, to, status: giveUp ? 'failed' : 'retrying', error: emsg });
     if (job.client_id && giveUp) {
       const { ackToClient } = await import('./puller.js');
