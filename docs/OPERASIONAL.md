@@ -71,6 +71,7 @@ robocopy "D:\ApplicationWeb\wa-gateway\engine\sessions" "D:\backup\wa-sessions" 
 | Pesan tetap "Antrean" | worker dimatikan / kuota harian habis / sesi terputus | Pengaturan → aktifkan pengiriman; cek kuota & status sesi |
 | Status "Gagal: nomor tidak terdaftar WhatsApp" | nomor bukan pengguna WA | perbaiki data nomor di aplikasi |
 | Pesan dari hosting tidak masuk | endpoint hosting salah token/URL | menu Aplikasi Hosting → **Tarik job sekarang**, lihat kolom *Terakhir/Hasil* |
+| Penerima melihat **"Menunggu pesan ini. Ini mungkin membutuhkan waktu beberapa saat."** padahal status gateway sudah *sent* | penerima gagal mendekripsi; retry tidak bisa dilayani / sesi Signal tidak sinkron | tarik versi engine terbaru (`git pull`), restart engine. Bila masih: tombol **Logout WA** lalu pindai QR baru (lihat bagian 9) |
 | Port 3001 dipakai proses lain | bentrok | ubah `ENGINE_PORT` di `engine/.env` |
 
 ## 7. Tips agar nomor aman
@@ -91,8 +92,10 @@ Session error:Error: Bad MAC Error: Bad MAC
     at Object.verifyMAC (...\libsignal\src\crypto.js:87:15)
 ```
 
-**Artinya:** ada pesan **MASUK** yang tidak bisa didekripsi. Ini **tidak mempengaruhi
-pengiriman keluar** — menu Antrean/Rekap tetap normal.
+**Artinya:** ada pesan yang tidak bisa didekripsi karena sesi Signal tidak sinkron.
+Ini **bisa mempengaruhi pengiriman keluar juga** — sesi Signal yang sama dipakai untuk
+enkripsi keluar, jadi bila muncul terus-menerus, pesan keluar dapat ditolak HP penerima
+dan tampil sebagai *"Menunggu pesan ini..."* (lihat bagian 9).
 
 Dua kemungkinan, urut dari yang paling penting:
 
@@ -121,3 +124,48 @@ sekali per menit:
 
 Mau melihat semuanya kembali (untuk penelusuran)? set `WA_LOG_NOISE=off` di `engine/.env`
 lalu jalankan ulang engine.
+
+## 9. Pesan terkirim tapi penerima melihat "Menunggu pesan ini"
+
+Gejala: di dashboard status pesan sudah **sent**, tetapi di HP penerima pesan tampil sebagai
+
+```
+Menunggu pesan ini. Ini mungkin membutuhkan waktu beberapa saat.
+```
+
+Ini **bukan** berarti pesan belum dikirim. Envelope-nya sudah sampai, tetapi HP penerima
+**gagal mendekripsi** isinya. Saat itu terjadi, HP penerima mengirim *retry receipt* ke
+gateway, dan gateway harus mengirim ulang isi pesan memakai sesi Signal baru.
+
+Mesin versi lama tidak menyimpan isi pesan (`getMessage` selalu `undefined`), sehingga
+retry tidak pernah berhasil dan pesan menggantung. Sejak commit `fe1e916` engine menyimpan
+500 pesan terakhir (umur 6 jam) dan melayani retry secara otomatis.
+
+Langkah perbaikan:
+
+1. Perbarui kode lalu restart engine (jangan sampai ada dua instance):
+
+   ```bat
+   cd /d D:\ApplicationWeb\wa-gateway
+   git pull origin main
+   ```
+
+   Tutup jendela engine, lalu jalankan `start-gateway.bat` lagi.
+
+2. Kirim pesan **baru** untuk menguji. Pesan yang sudah telanjur menggantung tidak ikut
+   pulih (cache hanya menyimpan pesan sejak engine hidup) — kirim ulang dari aplikasi.
+
+3. Bila pesan baru **masih** menggantung, sesi Signal memang sudah rusak. Reset sesi:
+   Dashboard → kartu sesi → **Logout WA** → **Sambungkan ulang** → pindai QR dari HP
+   (WhatsApp → Perangkat tertaut → Tautkan perangkat).
+
+4. Pastikan hanya **satu** proses `node.exe` berjalan:
+
+   ```bat
+   tasklist | findstr /i node.exe
+   netstat -ano | findstr :3001
+   ```
+
+   Jangan menyalin folder `engine\sessions\` antar mesin saat engine hidup — kunci Signal
+   yang dipakai dua tempat akan saling merusak dan memicu gejala ini.
+
