@@ -13,6 +13,7 @@ import { config } from './config.js';
 import { q, one, dbLog } from './db.js';
 import { bus } from './bus.js';
 import { fromJid, toJid } from './phone.js';
+import { simpanPesan, ambilPesan, buatCacheRetry } from './msgstore.js';
 
 const silent = pino({ level: 'silent' });
 
@@ -39,6 +40,9 @@ export class WaSession {
     this.stopping = false;
     this.qrDataUrl = null;
     this.lastActivity = Date.now();
+    // Penghitung retry per pesan; dipakai Baileys untuk memutuskan pesan perlu
+    // dikirim ulang atau sudah melewati batas percobaan.
+    this.retryCache = buatCacheRetry();
   }
 
   get authDir() {
@@ -119,7 +123,10 @@ export class WaSession {
       markOnlineOnConnect: false,
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      getMessage: async () => undefined,
+      // WAJIB: tanpa ini retry receipt dari penerima tidak bisa dilayani dan
+      // pesan menggantung "Menunggu pesan ini..." di HP penerima.
+      getMessage: ambilPesan,
+      msgRetryCounterCache: this.retryCache,
     });
 
     this.sock.ev.on('creds.update', saveCreds);
@@ -233,7 +240,10 @@ export class WaSession {
   async onMessagesUpsert({ messages, type }) {
     if (type !== 'notify') return;
     for (const m of messages ?? []) {
-      if (!m.key || m.key.fromMe) continue;
+      if (!m.key) continue;
+      // Simpan isi pesan untuk melayani retry/dekripsi poll yang memanggil getMessage.
+      simpanPesan(m);
+      if (m.key.fromMe) continue;
       const remote = m.key.remoteJid ?? '';
       if (remote.endsWith('@g.us') || remote === 'status@broadcast') continue;
       const from = fromJid(remote);
@@ -295,6 +305,10 @@ export class WaSession {
     if (!this.isReady) throw new Error('sesi belum tersambung');
     const jid = toJid(to);
     const res = await this.sock.sendMessage(jid, content);
+    // Simpan hasil kirim: bila penerima minta kirim ulang (gagal dekripsi),
+    // Baileys memanggil getMessage dan menemukan isi asli di sini.
+    if (res?.message) simpanPesan(res);
+    else if (res?.key?.id) simpanPesan({ key: res.key, message: content });
     this.lastActivity = Date.now();
     return res;
   }

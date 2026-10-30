@@ -8,9 +8,12 @@
  *   Failed to decrypt message with any known session...
  *   Session error:Error: Bad MAC Error: Bad MAC
  *
- * Artinya: ada pesan MASUK yang tidak bisa didekripsi. Penyebab umum dan tidak
- * berbahaya: pesan dikirim saat sesi baru saja ditautkan/belum sinkron. Ini bukan
- * tanda gateway rusak dan tidak mempengaruhi pengiriman keluar.
+ * Artinya: ada pesan yang tidak bisa didekripsi karena sesi Signal tidak sinkron.
+ * Ini TIDAK selalu tidak berbahaya: sesi Signal yang sama dipakai untuk ENKRIPSI
+ * keluar, jadi ketika muncul terus-menerus, pesan keluar juga bisa ditolak HP
+ * penerima dan tampil sebagai "Menunggu pesan ini. Ini mungkin membutuhkan waktu
+ * beberapa saat." Bila jumlahnya melonjak, tautkan ulang sesi WA (logout lalu scan
+ * QR baru) supaya kunci Signal dibuat ulang.
  *
  * Yang kita lakukan: redam baris-baris itu supaya jendela engine tetap terbaca,
  * TETAPI tetap dihitung dan diringkas maksimal sekali per menit, supaya tidak buta
@@ -60,8 +63,8 @@ function saring(level, args) {
   if (sekarang - terakhirLapor >= JEDA_LAPOR_MS) {
     terakhirLapor = sekarang;
     asli.warn(
-      `[redam] ${jumlah} baris kebisingan libsignal disembunyikan (pesan masuk gagal didekripsi - normal, ` +
-        'tidak mempengaruhi pengiriman). Jika jumlahnya melonjak terus, periksa jangan-jangan ada DUA engine memakai sesi WA yang sama.'
+      `[redam] ${jumlah} baris kebisingan libsignal disembunyikan (pesan gagal didekripsi - sesi Signal tidak sinkron). ` +
+        'Bila jumlahnya melonjak terus, tautkan ulang sesi WA (logout lalu scan QR baru) dan pastikan hanya SATU engine memakai sesi yang sama.'
     );
   }
 }
