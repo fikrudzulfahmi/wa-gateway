@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WA Gateway Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-badge {
+      background: #22c55e;
+      color: #0f172a;
+      font-weight: bold;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    h1 { font-size: 22px; font-weight: 700; }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; margin-bottom: 20px; }
+    .grid-full { margin-bottom: 20px; }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+    .badge-warning { background: rgba(234, 179, 8, 0.2); color: #fde047; border: 1px solid #eab308; }
+    .badge-danger { background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid #ef4444; }
+    .badge-muted { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid #64748b; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      background: var(--card-border);
+      color: var(--text);
+    }
+    .btn:hover { background: #475569; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+
+    .qr-box {
+      background: #0f172a;
+      border: 1px dashed var(--card-border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      min-height: 240px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .qr-box img { max-width: 220px; border-radius: 8px; background: #fff; padding: 6px; }
+
+    .info-list { list-style: none; font-size: 13px; margin-bottom: 16px; }
+    .info-list li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .info-list li:last-child { border-bottom: none; }
+    .info-list .lbl { color: var(--text-muted); }
+    .info-list .val { font-weight: 600; font-family: monospace; font-size: 13px; }
+
+    .code-box {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin-bottom: 12px;
+      word-break: break-all;
+    }
+
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    input, textarea, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: #fff;
+      font-size: 13px;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    textarea { resize: vertical; min-height: 70px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+    th { color: var(--text-muted); padding: 8px; border-bottom: 1px solid var(--card-border); font-weight: 600; }
+    td { padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .token-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .token-bar input { font-family: monospace; }
+
+    .alert {
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .alert-success { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #86efac; }
+    .alert-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <span class="logo-badge">PORT 3001</span>
+        <div>
+          <h1>WA Gateway Standalone</h1>
+          <div class="subtitle">Endpoint REST API (Fonnte Compatible) + Engine Baileys</div>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span id="headerStatusBadge" class="badge badge-muted">Memeriksa...</span>
+        <button class="btn btn-sm" onclick="refreshAll()">Segarkan</button>
+      </div>
+    </header>
+
+    <div class="grid-2">
+      <!-- KARTU STATUS SESI WA -->
+      <div class="card">
+        <div class="card-title">
+          <span>Status Sesi WhatsApp</span>
+          <span id="sessionStatusBadge" class="badge badge-muted">Memuat...</span>
+        </div>
+
+        <div class="qr-box" id="qrContainer">
+          <div id="qrPlaceholder" style="color: var(--text-muted); font-size: 13px;">
+            Menunggu status koneksi...
+          </div>
+        </div>
+
+        <ul class="info-list">
+          <li>
+            <span class="lbl">Nomor Terhubung</span>
+            <span class="val" id="valPhone">-</span>
+          </li>
+          <li>
+            <span class="lbl">Terkoneksi Sejak</span>
+            <span class="val" id="valConnectedAt">-</span>
+          </li>
+          <li>
+            <span class="lbl">Terkirim Hari Ini</span>
+            <span class="val" id="valSentToday">0</span>
+          </li>
+          <li>
+            <span class="lbl">Catatan Sesi</span>
+            <span class="val" id="valLastError" style="color:#f87171; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span>
+          </li>
+        </ul>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="actionSession('restart')">Restart Sesi / Scan QR</button>
+          <button class="btn btn-danger" onclick="actionSession('logout')">Logout WA</button>
+        </div>
+      </div>
+
+      <!-- KARTU INTEGRASI ENDPOINT FONNTE -->
+      <div class="card">
+        <div class="card-title">
+          <span>Integrasi Endpoint (Fonnte API)</span>
+          <span class="badge badge-success">POST /send</span>
+        </div>
+
+        <label>Token Gateway (Gunakan di Header Authorization)</label>
+        <div class="token-bar">
+          <input type="text" id="tokenInput" placeholder="Masukkan token gateway" readonly>
+          <button class="btn" onclick="copyToken()">Salin</button>
+          <button class="btn" onclick="setManualToken()">Ubah</button>
+        </div>
+
+        <label>URL Endpoint Kirim (Lewat Cloudflare Tunnel atau Lokal):</label>
+        <div class="code-box" id="endpointBox">http://localhost:3001/send</div>
+
+        <label>Contoh Request PHP (Fonnte Compatible):</label>
+        <div class="code-box" style="white-space: pre; font-size: 11px;">$curl = curl_init();
+curl_setopt_array($curl, [
+  CURLOPT_URL => "http://localhost:3001/send", // ganti domain Cloudflare anda
+  CURLOPT_RETURNTRANSFER => true,
+  CURLOPT_HTTPHEADER => ["Authorization: " . $TOKEN],
+  CURLOPT_POSTFIELDS => [
+    "target"  => "081234567890",
+    "message" => "Halo dari Web/Hosting!"
+  ]
+]);
+$response = curl_exec($curl);</div>
+
+        <div style="font-size: 12px; color: var(--text-muted);">
+          Format parameter: <code>target</code> (nomor hp), <code>message</code> (teks), <code>url</code> (media opsional).
+        </div>
+      </div>
+    </div>
+
+    <!-- KARTU TEST KIRIM PESAN -->
+    <div class="card grid-full">
+      <div class="card-title">
+        <span>Test Kirim Pesan Cepat</span>
+      </div>
+      <div id="alertBox" class="alert"></div>
+      <form id="testSendForm" onsubmit="handleTestSend(event)">
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+          <div class="form-group">
+            <label>Nomor Tujuan (Target)</label>
+            <input type="text" id="sendTarget" placeholder="Contoh: 081234567890 atau 62812..." required>
+          </div>
+          <div class="form-group">
+            <label>URL Media (Opsional Gambar/PDF)</label>
+            <input type="url" id="sendMediaUrl" placeholder="https://example.com/gambar.jpg">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Isi Pesan (Message)</label>
+          <textarea id="sendMessage" placeholder="Tulis isi pesan uji coba di sini..." required></textarea>
+        </div>
+        <button type="submit" id="btnKirim" class="btn btn-primary">Kirim Pesan Sekarang</button>
+      </form>
+    </div>
+
+    <!-- KARTU ANTREAN & PESAN TERAKHIR -->
+    <div class="card grid-full">
+      <div class="card-title">
+        <span>20 Pesan Terakhir (Antrean & Log Outbox)</span>
+        <button class="btn btn-sm" onclick="fetchOutbox()">Refresh Tabel</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Waktu</th>
+              <th>Tujuan</th>
+              <th>Tipe</th>
+              <th>Isi Pesan</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="outboxBody">
+            <tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Memuat antrean...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let TOKEN = localStorage.getItem('wa_token') || '';
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('token')) {
+      TOKEN = params.get('token');
+      localStorage.setItem('wa_token', TOKEN);
+    }
+
+    function updateEndpointBox() {
+      const proto = window.location.protocol;
+      const host = window.location.host;
+      document.getElementById('endpointBox').textContent = `${proto}//${host}/send`;
+    }
+    updateEndpointBox();
+
+    function setManualToken() {
+      const baru = prompt('Masukkan token gateway:', TOKEN);
+      if (baru !== null && baru.trim() !== '') {
+        TOKEN = baru.trim();
+        localStorage.setItem('wa_token', TOKEN);
+        document.getElementById('tokenInput').value = TOKEN;
+        refreshAll();
+      }
+    }
+
+    function copyToken() {
+      const el = document.getElementById('tokenInput');
+      el.select();
+      navigator.clipboard.writeText(el.value).then(() => {
+        alert('Token berhasil disalin ke clipboard!');
+      });
+    }
+
+    async function apiFetch(endpoint, opts = {}) {
+      const headers = opts.headers || {};
+      if (TOKEN) {
+        headers['Authorization'] = TOKEN;
+        headers['X-Token'] = TOKEN;
+      }
+      opts.headers = headers;
+      const res = await fetch(endpoint, opts);
+      if (res.status === 401) {
+        const t = prompt('Token tidak valid atau belum diisi. Masukkan token engine:');
+        if (t) {
+          TOKEN = t.trim();
+          localStorage.setItem('wa_token', TOKEN);
+          document.getElementById('tokenInput').value = TOKEN;
+          return apiFetch(endpoint, opts);
+        }
+      }
+      return res.json();
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await apiFetch('/api/settings');
+        if (res.ok && res.data && res.data.engine_token) {
+          if (!TOKEN) {
+            TOKEN = res.data.engine_token;
+            localStorage.setItem('wa_token', TOKEN);
+          }
+          document.getElementById('tokenInput').value = TOKEN || res.data.engine_token;
+        }
+      } catch (e) {
+        document.getElementById('tokenInput').value = TOKEN;
+      }
+    }
+
+    async function fetchSessions() {
+      try {
+        const res = await apiFetch('/api/sessions');
+        if (!res.ok || !res.data || res.data.length === 0) return;
+        const s = res.data[0];
+        const status = s.live_status || s.status;
+
+        const badge = document.getElementById('sessionStatusBadge');
+        const headerBadge = document.getElementById('headerStatusBadge');
+        badge.className = 'badge';
+        headerBadge.className = 'badge';
+
+        if (status === 'connected') {
+          badge.classList.add('badge-success');
+          badge.textContent = 'Terhubung';
+          headerBadge.classList.add('badge-success');
+          headerBadge.textContent = 'Online';
+        } else if (status === 'qr') {
+          badge.classList.add('badge-warning');
+          badge.textContent = 'Menunggu Scan QR';
+          headerBadge.classList.add('badge-warning');
+          headerBadge.textContent = 'Scan QR';
+        } else if (status === 'connecting') {
+          badge.classList.add('badge-warning');
+          badge.textContent = 'Menyambungkan...';
+          headerBadge.classList.add('badge-warning');
+          headerBadge.textContent = 'Connecting';
+        } else {
+          badge.classList.add('badge-danger');
+          badge.textContent = 'Terputus';
+          headerBadge.classList.add('badge-danger');
+          headerBadge.textContent = 'Offline';
+        }
+
+        document.getElementById('valPhone').textContent = s.phone || '-';
+        document.getElementById('valConnectedAt').textContent = s.connected_at ? new Date(s.connected_at).toLocaleString('id-ID') : '-';
+        document.getElementById('valSentToday').textContent = s.sent_today_real || 0;
+        document.getElementById('valLastError').textContent = s.last_error || '-';
+        document.getElementById('valLastError').title = s.last_error || '';
+
+        // QR Code
+        const qrBox = document.getElementById('qrContainer');
+        if (status === 'connected') {
+          qrBox.innerHTML = '<div style="color:#4ade80; font-weight:600; font-size:14px;">WhatsApp Terhubung (' + (s.phone || 'OK') + ')</div><div style="font-size:12px; color:var(--text-muted); margin-top:6px;">Siap menerima pengiriman pesan lewat /send</div>';
+        } else if (status === 'qr' && s.qr_string) {
+          qrBox.innerHTML = '<div style="margin-bottom:8px; font-weight:600; font-size:13px; color:#fde047;">Pindai QR ini dari WhatsApp di HP:</div><img src="' + s.qr_string + '" alt="QR Code" /><div style="font-size:11px; color:var(--text-muted); margin-top:6px;">QR berganti otomatis tiap 20 detik</div>';
+        } else {
+          qrBox.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">Sesi terputus. Klik <b>Restart Sesi / Scan QR</b> untuk menghubungkan kembali.</div>';
+        }
+      } catch (e) {
+        console.error('Fetch sessions failed:', e);
+      }
+    }
+
+    async function actionSession(act) {
+      if (!confirm(`Yakin ingin melakukan ${act} sesi WA?`)) return;
+      try {
+        const res = await apiFetch(`/api/sessions/default/${act}`, { method: 'POST' });
+        if (res.ok) {
+          fetchSessions();
+        } else {
+          alert('Gagal: ' + (res.error || 'Terjadi kesalahan'));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function fetchOutbox() {
+      try {
+        const res = await apiFetch('/api/outbox?limit=20');
+        if (!res.ok || !res.data) return;
+        const tbody = document.getElementById('outboxBody');
+        if (res.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted);">Belum ada antrean pesan</td></tr>';
+          return;
+        }
+        tbody.innerHTML = res.data.map(r => {
+          let stBadge = 'badge-muted';
+          if (r.status === 'sent') stBadge = 'badge-success';
+          else if (r.status === 'queued' || r.status === 'sending') stBadge = 'badge-warning';
+          else if (r.status === 'failed') stBadge = 'badge-danger';
+
+          const time = new Date(r.created_at).toLocaleTimeString('id-ID');
+          const bodyShort = (r.body || r.media_url || '-').slice(0, 45);
+
+          const btnRetry = (r.status === 'failed' || r.status === 'cancelled')
+            ? `<button class="btn btn-sm" onclick="retryMessage(${r.id})">Retry</button>`
+            : '-';
+
+          return `<tr>
+            <td>#${r.id}</td>
+            <td>${time}</td>
+            <td><b>${r.to_number}</b></td>
+            <td>${r.type}</td>
+            <td title="${(r.body || '').replace(/"/g, '&quot;')}">${bodyShort}</td>
+            <td><span class="badge ${stBadge}">${r.status}</span></td>
+            <td>${btnRetry}</td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        console.error('Fetch outbox failed:', e);
+      }
+    }
+
+    async function retryMessage(id) {
+      try {
+        const res = await apiFetch(`/api/outbox/${id}/retry`, { method: 'POST' });
+        if (res.ok) {
+          fetchOutbox();
+        }
+      } catch (e) {
+        alert('Retry gagal: ' + e.message);
+      }
+    }
+
+    async function handleTestSend(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnKirim');
+      const alertBox = document.getElementById('alertBox');
+      btn.disabled = true;
+      btn.textContent = 'Mengirim...';
+      alertBox.style.display = 'none';
+
+      const payload = {
+        target: document.getElementById('sendTarget').value.trim(),
+        message: document.getElementById('sendMessage').value.trim(),
+        url: document.getElementById('sendMediaUrl').value.trim() || undefined,
+      };
+
+      try {
+        const res = await apiFetch('/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        alertBox.style.display = 'block';
+        if (res.status) {
+          alertBox.className = 'alert alert-success';
+          alertBox.textContent = `Sukses! Pesan ke ${res.target} masuk antrean (ID: ${res.id}).`;
+          document.getElementById('sendMessage').value = '';
+          fetchOutbox();
+        } else {
+          alertBox.className = 'alert alert-danger';
+          alertBox.textContent = `Gagal: ${res.reason || 'Terjadi kesalahan'}`;
+        }
+      } catch (err) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'alert alert-danger';
+        alertBox.textContent = 'Error: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Kirim Pesan Sekarang';
+      }
+    }
+
+    function initSSE() {
+      try {
+        const evt = new EventSource('/api/events');
+        evt.addEventListener('session', () => fetchSessions());
+        evt.addEventListener('qr', () => fetchSessions());
+        evt.addEventListener('status', () => { fetchSessions(); fetchOutbox(); });
+        evt.addEventListener('queued', () => fetchOutbox());
+      } catch (e) {
+        console.log('SSE not supported or failed, using interval');
+      }
+    }
+
+    function refreshAll() {
+      fetchSessions();
+      fetchOutbox();
+    }
+
+    loadSettings().then(() => {
+      refreshAll();
+      initSSE();
+      setInterval(refreshAll, 6000);
+    });
+  </script>
+</body>
+</html>

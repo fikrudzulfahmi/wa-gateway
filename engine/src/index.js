@@ -143,7 +143,13 @@ async function main() {
   const server = app.listen(config.port, config.host, () => {
     console.log(`[ready] engine jalan di http://${config.host}:${config.port}`);
     console.log(`[ready] token       : ${config.token}`);
-    console.log(`[ready] mode        : PULL ke aplikasi hosting (interval ${config.pullInterval}s)`);
+    console.log(`[ready] endpoint    : POST http://${config.host}:${config.port}/send (Fonnte Compatible)`);
+    console.log(`[ready] dashboard   : http://localhost:${config.port}/`);
+    if (config.pullEnabled) {
+      console.log(`[ready] mode pull   : aktif (interval ${config.pullInterval}s)`);
+    } else {
+      console.log(`[ready] mode pull   : nonaktif (gunakan endpoint /send via Cloudflare/HTTP)`);
+    }
     dbLog('info', 'engine_ready', `engine jalan di ${config.host}:${config.port}`);
   });
 
@@ -161,7 +167,7 @@ async function main() {
   });
 
   const stopSender = startSender(sessions);
-  const stopPuller = startPuller(sessions);
+  const stopPuller = config.pullEnabled ? startPuller(sessions) : () => {};
 
   // Heartbeat: tandai sesi yang hidup + broadcast ringkasan tiap 30 detik
   const hb = setInterval(async () => {

@@ -34,7 +34,7 @@ if (!token) {
 }
 
 export const config = {
-  host: process.env.ENGINE_HOST || '127.0.0.1',
+  host: process.env.ENGINE_HOST || '0.0.0.0',
   port: int(process.env.ENGINE_PORT, 3001),
   token,
 
@@ -50,6 +50,7 @@ export const config = {
   delayMin: int(process.env.SEND_DELAY_MIN, 3),
   delayMax: int(process.env.SEND_DELAY_MAX, 8),
   workerTick: int(process.env.WORKER_TICK, 2),
+  pullEnabled: bool(process.env.PULL_ENABLED, false),
   pullInterval: int(process.env.PULL_INTERVAL, 10),
   pullAck: bool(process.env.PULL_ACK, true),
   logLevel: process.env.LOG_LEVEL || 'info',
