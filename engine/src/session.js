@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import makeWASocket, {
   useMultiFileAuthState,
+  makeCacheableSignalKeyStore,
   DisconnectReason,
   fetchLatestBaileysVersion,
   Browsers,
@@ -116,7 +117,13 @@ export class WaSession {
 
     this.sock = makeWASocket({
       version,
-      auth: state,
+      auth: {
+        creds: state.creds,
+        // WAJIB makeCacheableSignalKeyStore: tanpa in-memory cache + transaction lock,
+        // operasi kunci Signal saat kirim beruntun/massal saling mendahului di disk,
+        // memicu race condition, Bad MAC, dan pesan menggantung 'Menunggu pesan ini'.
+        keys: makeCacheableSignalKeyStore(state.keys, silent),
+      },
       logger: silent,
       printQRInTerminal: false,
       browser: Browsers.ubuntu('Chrome'),
@@ -307,8 +314,15 @@ export class WaSession {
     const res = await this.sock.sendMessage(jid, content);
     // Simpan hasil kirim: bila penerima minta kirim ulang (gagal dekripsi),
     // Baileys memanggil getMessage dan menemukan isi asli di sini.
-    if (res?.message) simpanPesan(res);
-    else if (res?.key?.id) simpanPesan({ key: res.key, message: content });
+    if (res?.message) {
+      simpanPesan(res);
+    } else if (res?.key?.id) {
+      // Normalisasi fallback ke proto.IMessage jika res.message belum terisi
+      const msgProto = content?.text !== undefined
+        ? { conversation: String(content.text) }
+        : content;
+      simpanPesan({ key: res.key, message: msgProto });
+    }
     this.lastActivity = Date.now();
     return res;
   }

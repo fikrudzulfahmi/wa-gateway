@@ -40,21 +40,48 @@ export async function ambilPesan(key) {
   const id = kunci(key);
   if (!id) return undefined;
   const rec = peta.get(id);
-  if (!rec) return undefined;
-  if (Date.now() - rec.ts > UMUR_MS) {
+  if (rec) {
+    if (Date.now() - rec.ts <= UMUR_MS) {
+      return rec.message;
+    }
     peta.delete(id);
-    return undefined;
   }
-  return rec.message;
+
+  // Fallback: ambil dari tabel wa_messages bila pesan terbuang dari RAM / setelah restart
+  try {
+    const { one } = await import('./db.js');
+    const row = await one('SELECT type, body FROM wa_messages WHERE wa_message_id = ? LIMIT 1', [id]);
+    if (row) {
+      if (row.type === 'text' || !row.type) {
+        return { conversation: row.body ?? '' };
+      }
+      if (row.body) {
+        return { conversation: row.body };
+      }
+    }
+  } catch {
+    // Abaikan jika DB tidak dapat diakses atau di lingkungan uji
+  }
+
+  return undefined;
 }
 
 /** Cache penghitung retry sederhana (antarmuka CacheStore Baileys). */
 export function buatCacheRetry() {
-  const m = new Map();
+  const m = new Map(); // key -> { val, ts }
+  const TTL_MS = 60 * 60 * 1000; // 1 jam sesuai standar DEFAULT_CACHE_TTLS.MSG_RETRY
   return {
-    get: (k) => m.get(k),
+    get: (k) => {
+      const rec = m.get(k);
+      if (!rec) return undefined;
+      if (Date.now() - rec.ts > TTL_MS) {
+        m.delete(k);
+        return undefined;
+      }
+      return rec.val;
+    },
     set: (k, v) => {
-      m.set(k, v);
+      m.set(k, { val: v, ts: Date.now() });
     },
     del: (k) => {
       m.delete(k);

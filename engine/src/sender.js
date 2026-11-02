@@ -56,106 +56,114 @@ let lastQuotaWarn = 0;
 /** Ambil satu job dari antrean lalu kirim. Dipanggil berkala. */
 async function processOne(sessions) {
   if (busy) return { skipped: 'busy' };
-  if ((await getSetting('worker_enabled', '1')) !== '1') return { skipped: 'worker-off' };
-
-  const job = await one(
-    `SELECT o.*, s.name AS session_name, s.label AS session_label, s.daily_quota
-       FROM wa_outbox o
-       JOIN wa_sessions s ON s.id = o.session_id
-      WHERE o.status = 'queued'
-        AND (o.scheduled_at IS NULL OR o.scheduled_at <= NOW())
-      ORDER BY o.priority ASC, o.id ASC
-      LIMIT 1`
-  );
-  if (!job) return { skipped: 'empty' };
-
-  const session = sessions.get(job.session_name);
-  if (!session) {
-    await q('UPDATE wa_outbox SET last_error = ? WHERE id = ?', ['sesi WA tidak ditemukan', job.id]);
-    return { skipped: 'no-session' };
-  }
-  if (!session.isReady) {
-    // Jangan tandai gagal: biarkan mengantre sampai sesi tersambung lagi
-    await q('UPDATE wa_outbox SET last_error = ? WHERE id = ?', [`sesi "${job.session_name}" belum tersambung`, job.id]);
-    return { skipped: 'session-not-ready' };
-  }
-
-  // Kuota harian per sesi
-  const left = await session.quotaLeft();
-  if (left <= 0) {
-    if (Date.now() - lastQuotaWarn > 3600_000) {
-      lastQuotaWarn = Date.now();
-      await dbLog('warning', 'quota_habis', `kuota harian sesi "${job.session_name}" habis, pengiriman ditunda`, null, job.session_id);
-    }
-    return { skipped: 'quota' };
-  }
-
+  // Kunci atomik langsung di awal agar panggilan beruntun/massal tidak tembus bersamaan
   busy = true;
-  const to = normalizePhone(job.to_number);
-  let msgId = null;
+
   try {
-    await q('UPDATE wa_outbox SET status = "sending", claimed_at = NOW() WHERE id = ?', [job.id]);
-    const ins = await q(
-      `INSERT INTO wa_messages (outbox_id, session_id, client_id, direction, chat_id, to_number, type, body, status)
-       VALUES (?,?,?,'out',?,?,?,?, 'sending')`,
-      [job.id, job.session_id, job.client_id ?? null, `${to}@s.whatsapp.net`, to, job.type, job.body ?? null]
+    if ((await getSetting('worker_enabled', '1')) !== '1') return { skipped: 'worker-off' };
+
+    const job = await one(
+      `SELECT o.*, s.name AS session_name, s.label AS session_label, s.daily_quota
+         FROM wa_outbox o
+         JOIN wa_sessions s ON s.id = o.session_id
+        WHERE o.status = 'queued'
+          AND (o.scheduled_at IS NULL OR o.scheduled_at <= NOW())
+        ORDER BY o.priority ASC, o.id ASC
+        LIMIT 1`
     );
-    msgId = ins.insertId;
+    if (!job) return { skipped: 'empty' };
 
-    const content = buildContent(job);
-    const sent = await session.sendContent(to, content);
-    const waId = sent?.key?.id ?? null;
-
-    await q(
-      `UPDATE wa_messages SET status='sent', sent_at=NOW(), wa_message_id=?, error=NULL WHERE id=?`,
-      [waId, msgId]
-    );
-    await q('UPDATE wa_outbox SET status="sent", sent_at=NOW(), last_error=NULL WHERE id = ?', [job.id]);
-    await session.bumpSentToday();
-
-    bus.publish('status', { outbox_id: job.id, to, status: 'sent', wa_message_id: waId, at: new Date().toISOString() });
-    if (job.client_id) {
-      const { ackToClient } = await import('./puller.js');
-      await ackToClient(job.id, 'sent', { wa_message_id: waId });
+    const session = sessions.get(job.session_name);
+    if (!session) {
+      await q('UPDATE wa_outbox SET last_error = ? WHERE id = ?', ['sesi WA tidak ditemukan', job.id]);
+      return { skipped: 'no-session' };
     }
-    return { ok: true, id: job.id, to, wa_message_id: waId };
-  } catch (err) {
-    const emsg = String(err?.message ?? err).slice(0, 250);
-    const retryCount = Number(job.retry_count) + 1;
-    const giveUp = retryCount > Number(job.max_retry);
-    if (msgId) {
-      await q('UPDATE wa_messages SET status="failed", error=? WHERE id=?', [emsg, msgId]);
+    if (!session.isReady) {
+      // Jangan tandai gagal: biarkan mengantre sampai sesi tersambung lagi
+      await q('UPDATE wa_outbox SET last_error = ? WHERE id = ?', [`sesi "${job.session_name}" belum tersambung`, job.id]);
+      return { skipped: 'session-not-ready' };
     }
-    // Jeda bertingkat sebelum percobaan berikutnya (retry 1 -> 30 detik, dst.,
-    // maksimal 5 menit). Tanpa ini pesan gagal langsung dicoba ulang tiap tick
-    // (2 detik) sehingga nomor bermasalah membombardir WhatsApp dan menghabiskan
-    // kuota harian sesi.
-    const statusBaru = giveUp ? 'failed' : 'queued';
-    const tundaDetik = Math.min(300, retryCount * 30);
-    if (giveUp) {
-      await q(
-        `UPDATE wa_outbox SET status = ?, retry_count = ?, last_error = ? WHERE id = ?`,
-        [statusBaru, retryCount, emsg, job.id]
+
+    // Kuota harian per sesi
+    const left = await session.quotaLeft();
+    if (left <= 0) {
+      if (Date.now() - lastQuotaWarn > 3600_000) {
+        lastQuotaWarn = Date.now();
+        await dbLog('warning', 'quota_habis', `kuota harian sesi "${job.session_name}" habis, pengiriman ditunda`, null, job.session_id);
+      }
+      return { skipped: 'quota' };
+    }
+
+    const to = normalizePhone(job.to_number);
+    let msgId = null;
+    try {
+      await q('UPDATE wa_outbox SET status = "sending", claimed_at = NOW() WHERE id = ?', [job.id]);
+      const ins = await q(
+        `INSERT INTO wa_messages (outbox_id, session_id, client_id, direction, chat_id, to_number, type, body, status)
+         VALUES (?,?,?,'out',?,?,?,?, 'sending')`,
+        [job.id, job.session_id, job.client_id ?? null, `${to}@s.whatsapp.net`, to, job.type, job.body ?? null]
       );
-    } else {
+      msgId = ins.insertId;
+
+      const content = buildContent(job);
+      const sent = await session.sendContent(to, content);
+      const waId = sent?.key?.id ?? null;
+
       await q(
-        `UPDATE wa_outbox
-            SET status = ?, retry_count = ?, last_error = ?, scheduled_at = NOW() + INTERVAL ? SECOND
-          WHERE id = ?`,
-        [statusBaru, retryCount, emsg, tundaDetik, job.id]
+        `UPDATE wa_messages SET status='sent', sent_at=NOW(), wa_message_id=?, error=NULL WHERE id=?`,
+        [waId, msgId]
       );
+      await q('UPDATE wa_outbox SET status="sent", sent_at=NOW(), last_error=NULL WHERE id = ?', [job.id]);
+      await session.bumpSentToday();
+
+      bus.publish('status', { outbox_id: job.id, to, status: 'sent', wa_message_id: waId, at: new Date().toISOString() });
+      if (job.client_id) {
+        const { ackToClient } = await import('./puller.js');
+        await ackToClient(job.id, 'sent', { wa_message_id: waId });
+      }
+
+      // Jeda acak antar pesan supaya tidak terlihat seperti spam dan memberi waktu sesi Signal sinkron
+      await sleep(randDelay());
+      return { ok: true, id: job.id, to, wa_message_id: waId };
+    } catch (err) {
+      const emsg = String(err?.message ?? err).slice(0, 250);
+      const retryCount = Number(job.retry_count) + 1;
+      const giveUp = retryCount > Number(job.max_retry);
+      if (msgId) {
+        await q('UPDATE wa_messages SET status="failed", error=? WHERE id=?', [emsg, msgId]);
+      }
+      // Jeda bertingkat sebelum percobaan berikutnya (retry 1 -> 30 detik, dst.,
+      // maksimal 5 menit). Tanpa ini pesan gagal langsung dicoba ulang tiap tick
+      // (2 detik) sehingga nomor bermasalah membombardir WhatsApp dan menghabiskan
+      // kuota harian sesi.
+      const statusBaru = giveUp ? 'failed' : 'queued';
+      const tundaDetik = Math.min(300, retryCount * 30);
+      if (giveUp) {
+        await q(
+          `UPDATE wa_outbox SET status = ?, retry_count = ?, last_error = ? WHERE id = ?`,
+          [statusBaru, retryCount, emsg, job.id]
+        );
+      } else {
+        await q(
+          `UPDATE wa_outbox
+              SET status = ?, retry_count = ?, last_error = ?, scheduled_at = NOW() + INTERVAL ? SECOND
+            WHERE id = ?`,
+          [statusBaru, retryCount, emsg, tundaDetik, job.id]
+        );
+      }
+      bus.publish('status', { outbox_id: job.id, to, status: giveUp ? 'failed' : 'retrying', error: emsg });
+      if (job.client_id && giveUp) {
+        const { ackToClient } = await import('./puller.js');
+        await ackToClient(job.id, 'failed', { error: emsg });
+      }
+      await dbLog('error', giveUp ? 'send_failed' : 'send_retry', `ke ${to}: ${emsg}`, null, job.session_id);
+
+      // Tetap beri jeda sebelum lanjut
+      await sleep(randDelay());
+      return { error: emsg, id: job.id, retry: retryCount };
     }
-    bus.publish('status', { outbox_id: job.id, to, status: giveUp ? 'failed' : 'retrying', error: emsg });
-    if (job.client_id && giveUp) {
-      const { ackToClient } = await import('./puller.js');
-      await ackToClient(job.id, 'failed', { error: emsg });
-    }
-    await dbLog('error', giveUp ? 'send_failed' : 'send_retry', `ke ${to}: ${emsg}`, null, job.session_id);
-    return { error: emsg, id: job.id, retry: retryCount };
   } finally {
     busy = false;
-    // Jeda acak antar pesan supaya tidak terlihat seperti spam
-    await sleep(randDelay());
   }
 }
 
